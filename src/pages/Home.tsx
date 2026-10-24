@@ -1,6 +1,6 @@
 // home page
 export default function Home(){
     return(
-        <h1>Home</h1>
+        <h4>Home</h4>
     )
 }

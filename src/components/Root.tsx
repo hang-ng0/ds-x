@@ -4,15 +4,18 @@ import Gallery from "../pages/Gallery.tsx";
 import Paint from "../pages/Paint";
 import Home from "../pages/Home";
 import Header from "./Header.tsx";
+import GlobalStyle from "./GlobalStyle.tsx";
 
 export default function Root(){
     return(
         <>
+            <GlobalStyle />
+
             <Routes>
                 <Route path="/" element={
                     <>
-                        <Nav />
                         <Header/>
+                        <Nav />
                         <Home/>
                     </>
                 }/>
