@@ -439,3 +439,39 @@ body,
 .fp-layer {
   pointer-events: none;
 }
+
+/* Which hands have a toolbar color selected: "1" / "2" tags */
+.fp-badges {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  display: flex;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.fp-badges span {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #222;
+  color: #fff;
+  font: bold 11px system-ui, sans-serif;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+/* Sidebar buttons: icon above a short label so three fit in a narrow sidebar */
+.fp-actions button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  font-size: 12px;
+}
+
+.fp-actions button span {
+  font-size: 18px;
+}

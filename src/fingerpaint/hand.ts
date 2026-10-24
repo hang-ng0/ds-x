@@ -36,7 +36,7 @@ const HANDPRINT_THICKNESS = 0.22
 // Frames a new hand shape must hold before Auto switches brush
 const KIND_FRAMES = 4
 
-export async function createRecognizer(model: GestureModel, minConfidence: number) {
+export async function createRecognizer(model: GestureModel, minConfidence: number, numHands: number) {
   // Fetch it ourselves: a missing file would otherwise get the dev server's index.html
   const res = await fetch(MODEL_PATHS[model])
   if (!res.ok || res.headers.get('content-type')?.includes('text/html')) {
@@ -46,7 +46,7 @@ export async function createRecognizer(model: GestureModel, minConfidence: numbe
   const options = (delegate: 'GPU' | 'CPU') => ({
     baseOptions: { modelAssetBuffer, delegate },
     runningMode: 'VIDEO' as const,
-    numHands: 1,
+    numHands,
     minHandDetectionConfidence: minConfidence,
     minHandPresenceConfidence: minConfidence,
     minTrackingConfidence: minConfidence,
@@ -119,8 +119,10 @@ export type HandState = {
   down: boolean
   /** 0 = hand relaxed / open, 1 = right at the press threshold (drives the cursor ring) */
   press: number
-  /** Reach mode: 0 at the "far" calibration, 1 at "near" */
+  /** Fixed reach: 0 at the "far" calibration, 1 at "near" */
   depth: number
+  /** Relative reach: how much bigger the hand looks than at rest (0.15 = 15%) */
+  push: number
   /** Raw palm size, before smoothing (used by calibration) */
   palm: number
   pinch: number
@@ -138,6 +140,8 @@ export class PenTracker {
   private fx = Array.from({ length: 21 }, () => new OneEuroFilter(1, 0))
   private fy = Array.from({ length: 21 }, () => new OneEuroFilter(1, 0))
   private palm: number | null = null
+  private rest: number | null = null
+  private lastTime = 0
   private down = false
   private pending = 0
   private kind: BrushKind = 'pointer'
@@ -158,6 +162,21 @@ export class PenTracker {
     // The brush is locked while painting so a stroke never changes type halfway through
     if (!this.down) this.updateKind(tool === 'auto' ? kindFromShape(extended) : tool, tool === 'auto')
 
+    // Resting size: follows the hand while the pen is up and holds still while painting. It catches up
+    // quickly when the hand pulls back, slowly when it approaches, and barely at all once the hand is
+    // halfway into a push, so a deliberate push isn't absorbed before it reaches the press point.
+    const dt = this.rest === null ? 0 : Math.max(timeMs - this.lastTime, 0) / 1000
+    this.lastTime = timeMs
+    if (this.rest === null) {
+      this.rest = this.palm
+    } else if (!this.down) {
+      const growth = this.palm / this.rest - 1
+      const timeConstant =
+        growth < 0 ? s.adaptSeconds / 10 : growth > s.pushAmount / 2 ? s.adaptSeconds * 5 : s.adaptSeconds
+      this.rest += (this.palm - this.rest) * (1 - Math.exp(-dt / timeConstant))
+    }
+    const push = this.palm / this.rest - 1
+
     const depth = (this.palm - s.far) / Math.max(s.near - s.far, 1e-3)
     const pinch = dist(lm[THUMB_TIP], lm[INDEX_TIP], aspect) / rawPalm
     // Pinching changes the hand shape, so only the pointer can use it
@@ -171,9 +190,11 @@ export class PenTracker {
       pastPress = gesturePen
       pastRelease = !gesturePen
     } else if (mode === 'reach') {
-      press = depth / s.pressAt
-      pastPress = depth >= s.pressAt
-      pastRelease = depth < s.pressAt - s.gap
+      const [value, at, release] =
+        s.reachStyle === 'relative' ? [push, s.pushAmount, s.pushAmount - s.pushGap] : [depth, s.pressAt, s.pressAt - s.gap]
+      press = value / at
+      pastPress = value >= at
+      pastRelease = value < release
     } else {
       press = (1 - pinch) / (1 - s.pinchPress)
       pastPress = pinch <= s.pinchPress
@@ -215,7 +236,8 @@ export class PenTracker {
       y: clamp(cursor.y, bounds.y, bounds.y + bounds.h),
     }
 
-    const widthScale = mode === 'reach' && s.pressure ? clamp(0.7 + (depth - s.pressAt) * 2.5, 0.5, 1.8) : 1
+    // Reaching past the press point thickens the line
+    const widthScale = mode === 'reach' && s.pressure ? clamp(0.7 + (press - 1) * 1.75, 0.5, 1.8) : 1
     return {
       points,
       cursor,
@@ -224,6 +246,7 @@ export class PenTracker {
       down: this.down,
       press: clamp(press, 0, 1.2),
       depth,
+      push,
       palm: rawPalm,
       pinch,
       widthScale,
@@ -246,6 +269,7 @@ export class PenTracker {
   reset() {
     for (const f of [...this.fx, ...this.fy]) f.reset()
     this.palm = null
+    this.rest = null
     this.down = false
     this.pending = 0
     this.kindCount = 0

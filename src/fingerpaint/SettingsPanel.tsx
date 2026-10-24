@@ -85,10 +85,37 @@ export default function SettingsPanel({ settings: s, onChange, onReset, onClose 
       </Section>
 
       <Section title="Reach">
-        <Slider label="Far palm size" hint="Relaxed hand. Set by calibration." value={s.far} min={0.03} max={0.5} step={0.005} onChange={(far) => onChange({ far })} />
-        <Slider label="Near palm size" hint="Reaching hand. Set by calibration." value={s.near} min={0.03} max={0.6} step={0.005} onChange={(near) => onChange({ near })} />
-        <Slider label="Press point" hint="How far from far→near before paint starts" value={s.pressAt} min={0.2} max={1.2} step={0.01} onChange={(pressAt) => onChange({ pressAt })} />
-        <Slider label="Release gap" hint="How far back to pull before the pen lifts" value={s.gap} min={0} max={0.5} step={0.01} onChange={(gap) => onChange({ gap })} />
+        <div className="fp-segmented">
+          {(['relative', 'fixed'] as const).map((reachStyle) => (
+            <button
+              key={reachStyle}
+              type="button"
+              className={s.reachStyle === reachStyle ? 'active' : ''}
+              onClick={() => onChange({ reachStyle })}
+            >
+              {reachStyle === 'relative' ? 'From resting hand' : 'Fixed (calibrated)'}
+            </button>
+          ))}
+        </div>
+        <p className="fp-note">
+          {s.reachStyle === 'relative'
+            ? 'Paints when your hand looks bigger than it did at rest. Adapts as you lean in or sit back.'
+            : 'Paints at a fixed distance between your calibrated relaxed and reaching hand.'}
+        </p>
+        {s.reachStyle === 'relative' ? (
+          <>
+            <Slider label="Push amount" hint="How much bigger than at rest the hand must look (0.15 = 15%)" value={s.pushAmount} min={0.03} max={0.5} step={0.01} onChange={(pushAmount) => onChange({ pushAmount })} />
+            <Slider label="Release gap" hint="How far back to pull before the pen lifts" value={s.pushGap} min={0} max={0.2} step={0.01} onChange={(pushGap) => onChange({ pushGap })} />
+            <Slider label="Adapt time (s)" hint="How quickly a new resting position is learned" value={s.adaptSeconds} min={0.5} max={10} step={0.5} onChange={(adaptSeconds) => onChange({ adaptSeconds })} />
+          </>
+        ) : (
+          <>
+            <Slider label="Far palm size" hint="Relaxed hand. Set by calibration." value={s.far} min={0.03} max={0.5} step={0.005} onChange={(far) => onChange({ far })} />
+            <Slider label="Near palm size" hint="Reaching hand. Set by calibration." value={s.near} min={0.03} max={0.6} step={0.005} onChange={(near) => onChange({ near })} />
+            <Slider label="Press point" hint="How far from far→near before paint starts" value={s.pressAt} min={0.2} max={1.2} step={0.01} onChange={(pressAt) => onChange({ pressAt })} />
+            <Slider label="Release gap" hint="How far back to pull before the pen lifts" value={s.gap} min={0} max={0.5} step={0.01} onChange={(gap) => onChange({ gap })} />
+          </>
+        )}
         <Toggle label="Reach harder = thicker line" checked={s.pressure} onChange={(pressure) => onChange({ pressure })} />
       </Section>
 
@@ -116,6 +143,7 @@ export default function SettingsPanel({ settings: s, onChange, onReset, onClose 
       </Section>
 
       <Section title="Camera">
+        <Toggle label="Track two hands" checked={s.twoHands} onChange={(twoHands) => onChange({ twoHands })} />
         <Slider label="Active area" hint="Dashed box in the preview. Smaller = less arm movement." value={s.activeArea} min={0.4} max={1} step={0.05} onChange={(activeArea) => onChange({ activeArea })} />
         <Slider label="Detection confidence" hint="Lower helps small hands; too low = ghost hands" value={s.minDetect} min={0.1} max={0.9} step={0.05} onChange={(minDetect) => onChange({ minDetect })} />
       </Section>

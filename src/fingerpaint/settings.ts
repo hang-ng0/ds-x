@@ -1,5 +1,11 @@
 export type PenMode = 'reach' | 'pinch' | 'gesture'
 
+/**
+ * How reach is measured. `relative`: against the hand's own recent resting size, so posture changes
+ * don't matter. `fixed`: against the far/near palm sizes captured by calibration.
+ */
+export type ReachStyle = 'relative' | 'fixed'
+
 /** What part of the hand paints. `auto` picks one of the others from the hand shape. */
 export type Tool = 'pointer' | 'fingers' | 'palm' | 'auto'
 export type BrushKind = Exclude<Tool, 'auto'>
@@ -20,10 +26,16 @@ export type GestureAction =
 
 export type Settings = {
   mode: PenMode
-  // Reach mode: palm size (fraction of camera width) at a relaxed and a reaching distance
+  reachStyle: ReachStyle
+  // Relative reach: pen goes down when the hand looks `pushAmount` bigger than at rest (0.15 = 15%),
+  // lifts `pushGap` below that. The resting size follows the hand over about `adaptSeconds`.
+  pushAmount: number
+  pushGap: number
+  adaptSeconds: number
+  // Fixed reach: palm size (fraction of camera width) at a relaxed and a reaching distance
   far: number
   near: number
-  // Reach mode: pen goes down at this fraction of the way from far to near, lifts `gap` below it
+  // Fixed reach: pen goes down at this fraction of the way from far to near, lifts `gap` below it
   pressAt: number
   gap: number
   // Pinch mode: thumb–index distance divided by palm size
@@ -47,6 +59,7 @@ export type Settings = {
   showSkeleton: boolean
   showHud: boolean
   minDetect: number
+  twoHands: boolean
   gestureModel: GestureModel
   // A gesture counts only above this classifier score, and must be held this long before its action fires
   gestureMinScore: number
@@ -57,6 +70,10 @@ export type Settings = {
 
 export const DEFAULT_SETTINGS: Settings = {
   mode: 'reach',
+  reachStyle: 'relative',
+  pushAmount: 0.15,
+  pushGap: 0.06,
+  adaptSeconds: 3,
   far: 0.15,
   near: 0.25,
   pressAt: 0.7,
@@ -75,6 +92,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showSkeleton: true,
   showHud: true,
   minDetect: 0.4,
+  twoHands: true,
   gestureModel: 'builtin',
   gestureMinScore: 0.6,
   gestureHoldMs: 600,
