@@ -7,10 +7,10 @@ export default function Nav(){
                     <Link to = {'/'}>Home</Link>
                 </li>
                 <li>
-                    <Link to={'/education'}>Education</Link>
+                    <Link to={'/paint'}>Paint</Link>
                 </li>
                 <li>
-                    <Link to={'/experience'}>Experience</Link>
+                    <Link to={'/gallery'}>Gallery</Link>
                 </li>
             </ul>
         </nav>
