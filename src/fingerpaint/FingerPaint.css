@@ -3,13 +3,11 @@ body,
 #root {
   margin: 0;
   height: 100%;
-  overflow: hidden;
 }
 
 /* Layout: hand-controlled workspace on the left, camera + tuning sidebar on the right */
 
 .fp-app {
-  position: fixed;
   inset: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(260px, 24vw, 340px);
