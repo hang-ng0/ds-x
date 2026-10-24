@@ -1,4 +1,3 @@
-import FingerPaint from './fingerpaint/FingerPaint'
 import {createBrowserRouter, RouterProvider} from "react-router";
 import Root from "./components/Root.tsx";
 
@@ -7,7 +6,6 @@ export default function App() {
   return (
       <>
         <RouterProvider router={router}/>
-        <FingerPaint/>
       </>
   )
 }
