@@ -1,4 +1,22 @@
-export type PenMode = 'reach' | 'pinch'
+export type PenMode = 'reach' | 'pinch' | 'gesture'
+
+/** What part of the hand paints. `auto` picks one of the others from the hand shape. */
+export type Tool = 'pointer' | 'fingers' | 'palm' | 'auto'
+export type BrushKind = Exclude<Tool, 'auto'>
+
+export type GestureModel = 'builtin' | 'custom'
+
+/** What a recognized gesture does. `penDown` holds the pen down while shown (in "gesture" pen mode). */
+export type GestureAction =
+  | 'none'
+  | 'penDown'
+  | 'undo'
+  | 'clear'
+  | 'nextColor'
+  | 'eraser'
+  | `tool:${Tool}`
+  | `color:${string}`
+  | `brush:${number}`
 
 export type Settings = {
   mode: PenMode
@@ -22,10 +40,17 @@ export type Settings = {
   // Fraction of the camera frame mapped to the full screen, so kids don't have to reach the edges
   activeArea: number
   pressure: boolean
-  videoOpacity: number
+  // Handprint brush thickness, relative to the palm
+  handprint: number
   showSkeleton: boolean
   showHud: boolean
   minDetect: number
+  gestureModel: GestureModel
+  // A gesture counts only above this classifier score, and must be held this long before its action fires
+  gestureMinScore: number
+  gestureHoldMs: number
+  /** Gesture label (as the model reports it) → action */
+  gestureActions: Record<string, GestureAction>
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -43,10 +68,14 @@ export const DEFAULT_SETTINGS: Settings = {
   depthSmoothing: 0.6,
   activeArea: 0.8,
   pressure: true,
-  videoOpacity: 0.3,
-  showSkeleton: false,
+  handprint: 1,
+  showSkeleton: true,
   showHud: true,
   minDetect: 0.4,
+  gestureModel: 'builtin',
+  gestureMinScore: 0.6,
+  gestureHoldMs: 600,
+  gestureActions: {},
 }
 
 const STORAGE_KEY = 'fingerpaint-settings'
@@ -56,7 +85,7 @@ export function loadSettings(): Settings {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
     for (const key of Object.keys(settings) as (keyof Settings)[]) {
-      if (typeof saved[key] === typeof settings[key]) {
+      if (saved[key] !== null && typeof saved[key] === typeof settings[key]) {
         Object.assign(settings, { [key]: saved[key] })
       }
     }
