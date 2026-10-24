@@ -1,4 +1,5 @@
-export default function Gallery(){
+// home page
+export default function Home(){
     return(
         <h1>Home</h1>
     )
