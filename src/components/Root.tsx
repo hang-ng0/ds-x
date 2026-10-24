@@ -3,6 +3,7 @@ import Nav from "../components/Nav";
 import Gallery from "../pages/Gallery.tsx";
 import Paint from "../pages/Paint";
 import Home from "../pages/Home";
+import Header from "./Header.tsx";
 
 export default function Root(){
     return(
@@ -11,6 +12,7 @@ export default function Root(){
                 <Route path="/" element={
                     <>
                         <Nav />
+                        <Header/>
                         <Home/>
                     </>
                 }/>
