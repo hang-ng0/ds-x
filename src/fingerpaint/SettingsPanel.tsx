@@ -100,6 +100,7 @@ export default function SettingsPanel({ settings: s, onChange, onReset, onClose 
       )}
 
       <Section title="Brushes">
+        <Slider label="Paint opacity" hint="Lower = see-through strokes that darken where they overlap" value={s.paintOpacity} min={0.1} max={1} step={0.05} onChange={(paintOpacity) => onChange({ paintOpacity })} />
         <Slider label="Handprint thickness" hint="Finger width in the handprint brush" value={s.handprint} min={0.4} max={2} step={0.05} onChange={(handprint) => onChange({ handprint })} />
       </Section>
 

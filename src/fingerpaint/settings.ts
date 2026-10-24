@@ -42,6 +42,8 @@ export type Settings = {
   pressure: boolean
   // Handprint brush thickness, relative to the palm
   handprint: number
+  // Each stroke's opacity; below 1, overlapping strokes build up so you can shade
+  paintOpacity: number
   showSkeleton: boolean
   showHud: boolean
   minDetect: number
@@ -69,6 +71,7 @@ export const DEFAULT_SETTINGS: Settings = {
   activeArea: 0.8,
   pressure: true,
   handprint: 1,
+  paintOpacity: 0.5,
   showSkeleton: true,
   showHud: true,
   minDetect: 0.4,

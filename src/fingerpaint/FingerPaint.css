@@ -435,3 +435,7 @@ body,
 .fp-note code {
   font-size: 11px;
 }
+
+.fp-layer {
+  pointer-events: none;
+}

@@ -32,6 +32,7 @@ export default function FingerPaint() {
   const workspaceRef = useRef<HTMLDivElement>(null)
   const paperRef = useRef<HTMLDivElement>(null)
   const paintRef = useRef<HTMLCanvasElement>(null)
+  const layerRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const previewRef = useRef<HTMLCanvasElement>(null)
@@ -69,6 +70,10 @@ export default function FingerPaint() {
   useEffect(() => {
     brushRef.current = { color, size: brush, tool }
   }, [color, brush, tool])
+
+  useEffect(() => {
+    if (painterRef.current) painterRef.current.opacity = settings.paintOpacity
+  }, [settings.paintOpacity])
 
   useEffect(() => {
     const c = settings.minDetect
@@ -141,7 +146,8 @@ export default function FingerPaint() {
     const hud = hudRef.current!
     const octx = overlay.getContext('2d')!
     const pctx = preview.getContext('2d')!
-    const painter = new Painter(paintRef.current!)
+    const painter = new Painter(paintRef.current!, layerRef.current!)
+    painter.opacity = settingsRef.current.paintOpacity
     painterRef.current = painter
     const tracker = new PenTracker()
     const dwell = new Dwell()
@@ -181,7 +187,7 @@ export default function FingerPaint() {
     observer.observe(preview)
 
     const endHandStrokes = () => {
-      for (const f of FINGERS) painter.end(f.name)
+      painter.commit()
       handPainting = false
       prevPrint = null
     }
@@ -401,7 +407,7 @@ export default function FingerPaint() {
   const onPointerUp = () => {
     if (!pointerDrawingRef.current) return
     pointerDrawingRef.current = false
-    painterRef.current?.end('mouse')
+    painterRef.current?.commit()
   }
 
   return (
@@ -478,6 +484,8 @@ export default function FingerPaint() {
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
           />
+          {/* The stroke in progress, shown at the opacity it will be blended in with */}
+          <canvas ref={layerRef} className="fp-paint fp-layer" style={{ opacity: settings.paintOpacity }} />
           {notice && <div className="fp-notice">{notice}</div>}
         </div>
       </main>
