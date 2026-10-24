@@ -10,6 +10,7 @@ export default function Root(){
             <Routes>
                 <Route path="/" element={
                     <>
+                        <Nav />
                         <Home/>
                     </>
                 }/>
