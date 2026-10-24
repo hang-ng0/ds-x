@@ -2,37 +2,39 @@ import {Link} from "react-router";
 import styled from 'styled-components';
 
 const NavStyle = styled.nav`
-    padding: 3%;
-    background-color: cyan;
+    flex-shrink: 0;
 `;
 
 const UlStyle = styled.ul`
-    text-align: center;
-`;
-
-const LiStyle = styled.li`
-    display: inline;
+    display: flex;
+    align-items: center;
+    padding: 0;
     list-style: none;
 `;
 
 const LinkStyle = styled(Link)`
     text-decoration: none;
-    padding: 5%;
+    padding: 0.65rem 1rem;
+    border-radius: 0.5rem;
+
+    &:hover {
+        background-color: rgba(0, 0, 0, 0.1);
+    }
 `
 
 export default function Nav(){
     return(
         <NavStyle>
             <UlStyle>
-                <LiStyle>
+                <li>
                     <LinkStyle to = {'/'}>Home</LinkStyle>
-                </LiStyle>
-                <LiStyle>
+                </li>
+                <li>
                     <LinkStyle to={'/paint'}>Paint</LinkStyle>
-                </LiStyle>
-                <LiStyle>
+                </li>
+                <li>
                     <LinkStyle to={'/gallery'}>Gallery</LinkStyle>
-                </LiStyle>
+                </li>
             </UlStyle>
         </NavStyle>
     )

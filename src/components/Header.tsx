@@ -1,20 +1,17 @@
 import styled from "styled-components";
 
-const HeaderWrapper = styled.div`
-    position: relative;
-`;
-
 const HeaderStyle = styled.header`
-    position: absolute;
-    z-index: 10;
+    flex-shrink: 0;
+
+    h1 {
+        white-space: nowrap;
+    }
 `;
 
 export default function Header() {
     return(
-        <HeaderWrapper>
-            <HeaderStyle>
-                <h1>LITTLE FINGERS</h1>
-            </HeaderStyle>
-        </HeaderWrapper>
+        <HeaderStyle>
+            <h1>LITTLE FINGERS</h1>
+        </HeaderStyle>
     )
 }
