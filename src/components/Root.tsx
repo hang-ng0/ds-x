@@ -7,11 +7,24 @@ import Home from "../pages/Home";
 export default function Root(){
     return(
         <>
-            <Nav/>
             <Routes>
-                <Route path="/" element={<Home/>}/>
-                <Route path="/paint" element={<Paint/>}/>
-                <Route path="/gallery" element={<Gallery/>}/>
+                <Route path="/" element={
+                    <>
+                        <Home/>
+                    </>
+                }/>
+                <Route path="/paint" element={
+                    <>
+                        <Nav />
+                        <Paint/>
+                    </>
+                }/>
+                <Route path="/gallery" element={
+                    <>
+                        <Nav />
+                        <Gallery/>
+                    </>
+                }/>
             </Routes>
         </>
     )
