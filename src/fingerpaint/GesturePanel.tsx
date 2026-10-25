@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { ACTION_OPTIONS, isNoneLabel } from './gestures'
-import type { RecordingState } from './samples'
 import type { GestureAction, Settings } from './settings'
 import { Section, Slider } from './SettingsPanel'
 
