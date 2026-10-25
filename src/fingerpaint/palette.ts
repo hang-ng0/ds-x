@@ -16,7 +16,7 @@ export const BRUSHES = [8, 18, 36]
 
 export const TOOLS: { tool: Tool; name: string; label: string; icon: string }[] = [
   { tool: 'pointer', name: 'Pointer', label: 'Pointer: one finger paints', icon: '☝️' },
-  { tool: 'fingers', name: 'Fingers', label: 'Fingers: every finger you hold out paints', icon: '✌️' },
+  // { tool: 'fingers', name: 'Fingers', label: 'Fingers: every finger you hold out paints', icon: '✌️' },
   { tool: 'palm', name: 'Handprint', label: 'Handprint: your whole hand paints', icon: '✋' },
-  { tool: 'auto', name: 'Auto', label: 'Auto: brush follows your hand shape', icon: '✨' },
+  // { tool: 'auto', name: 'Auto', label: 'Auto: brush follows your hand shape', icon: '✨' },
 ]
