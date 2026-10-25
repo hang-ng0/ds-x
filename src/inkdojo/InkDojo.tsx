@@ -286,7 +286,7 @@ export default function InkDojo() {
         trails: noBody ? [] : trails,
         popups,
         paper: paperRect,
-        hint: noBody ? 'Step back so I can see you 🥋' : null,
+        hint: noBody ? 'Step back so I can see you' : null,
         dark: s.paper === 'dark',
         clear: noBody ? null : clearRing,
       })

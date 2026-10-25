@@ -70,7 +70,7 @@ export const DEFAULT_INK_SETTINGS: InkSettings = {
   cooldownMs: 400,
   minVisibility: 0.65,
   activeArea: 0.85,
-  paper: 'dark',
+    paper: 'light',
   inkScale: 1,
   splatter: 1,
   drips: true,
