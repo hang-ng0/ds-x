@@ -4,7 +4,6 @@ import styled from 'styled-components';
 
 const NavWrapper = styled.div`
     top: 59%;
-    left: 4%;
     position: relative;
     z-index: 10;
 `;
@@ -49,10 +48,10 @@ export default function NavHome(){
             <NavStyle>
                 <UlStyle>
                     <LiStyle>
-                        <LinkStyle to = {'/'}>Home</LinkStyle>
+                        <LinkStyle to = {'/fingerpaint'}>Finger Paint</LinkStyle>
                     </LiStyle>
                     <LiStyle>
-                        <LinkStyle to={'/paint'}>Paint</LinkStyle>
+                        <LinkStyle to={'/paint'}>Action Paint</LinkStyle>
                     </LiStyle>
                     <LiStyle>
                         <LinkStyle to={'/gallery'}>Gallery</LinkStyle>
