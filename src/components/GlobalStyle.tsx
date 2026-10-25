@@ -18,7 +18,7 @@ const GlobalStyle = createGlobalStyle`
         src: url(${LilitaOne}) ;
     }
     
-    header h1{
+    h1{
         font: calc(2px + 4vw) "SuperChildishFont", "Comic Sans MS", Papyrus, fantasy;
     }
     

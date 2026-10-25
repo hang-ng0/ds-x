@@ -1,0 +1,75 @@
+.gallery-page {
+    min-height: 100dvh;
+    padding: 24px;
+    text-align: center;
+    background: #2a7099; /* match your Ink Dojo blue */
+    color: #fff;
+}
+
+.gallery-page a {
+    color: #e8f1f8;
+}
+
+.gallery-error {
+    color: #ffd2d2;
+}
+
+.podium {
+    display: flex;
+    align-items: flex-end; /* all steps stand on the same floor */
+    justify-content: center;
+    gap: 12px;
+    max-width: 900px;
+    margin: 24px auto;
+}
+
+.podium-slot {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Image (or ???) sits on top of its step */
+.podium-frame {
+    aspect-ratio: 4 / 3;
+    display: grid;
+    place-items: center;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.15);
+    overflow: hidden;
+}
+
+.podium-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #fff;
+}
+
+.podium-empty {
+    font-size: clamp(32px, 6vw, 64px);
+    font-weight: 800;
+    opacity: 0.6;
+}
+
+/* Different step heights are what make it a podium */
+.podium-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 8px;
+    border-radius: 10px 10px 0 0;
+    color: #222;
+}
+
+.rank-1 .podium-step { height: 200px; background: #f5c542; }
+.rank-2 .podium-step { height: 150px; background: #cfd3d8; }
+.rank-3 .podium-step { height: 110px; background: #d9965b; }
+
+.podium-rank {
+    font-size: 40px;
+    font-weight: 800;
+}
