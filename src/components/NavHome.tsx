@@ -48,10 +48,10 @@ export default function NavHome(){
             <NavStyle>
                 <UlStyle>
                     <LiStyle>
-                        <LinkStyle to = {'/fingerpaint'}>Finger Paint</LinkStyle>
+                        <LinkStyle to={'/paint'}>Action Paint</LinkStyle>
                     </LiStyle>
                     <LiStyle>
-                        <LinkStyle to={'/paint'}>Action Paint</LinkStyle>
+                        <LinkStyle to = {'/fingerpaint'}>Finger Paint</LinkStyle>
                     </LiStyle>
                     <LiStyle>
                         <LinkStyle to={'/gallery'}>Gallery</LinkStyle>
