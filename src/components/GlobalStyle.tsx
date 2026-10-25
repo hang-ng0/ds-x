@@ -19,7 +19,7 @@ const GlobalStyle = createGlobalStyle`
     }
     
     header h1{
-        font: calc(2px + 3vw) "SuperChildishFont", "Comic Sans MS", Papyrus, fantasy;
+        font: calc(2px + 4vw) "SuperChildishFont", "Comic Sans MS", Papyrus, fantasy;
     }
     
     nav{
