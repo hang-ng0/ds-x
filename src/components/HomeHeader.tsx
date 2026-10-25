@@ -1,8 +1,9 @@
+// Styling for just the title text on the homescreen
 import styled from "styled-components";
 
 const StyledHeader = styled.header`
     position: relative;
-`
+`;
 
 const StyledH1 = styled.h1`
     color: #2a7099;
@@ -12,6 +13,7 @@ const StyledH1 = styled.h1`
     padding: 2% 3%;
     animation: swingBackAndForth 2s ease-in-out infinite alternate;
 
+    //adds the swinging animation 
     @keyframes swingBackAndForth {
         0% {
             transform: rotate(-5deg);
