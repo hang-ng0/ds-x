@@ -1,5 +1,5 @@
 // home page
-import home_bg from "../images/home_screen.png";
+import home_bg from "../images/Home Screen.png";
 import styled from "styled-components";
 
 const StyledDiv = styled.div`
