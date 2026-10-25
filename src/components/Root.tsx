@@ -24,6 +24,11 @@ const SiteBar = styled.div`
     }
 `;
 
+const HomePage = styled.div`
+    min-height: 100dvh;
+    overflow-x: clip;
+`;
+
 export default function Root(){
     return(
         <>
@@ -31,10 +36,10 @@ export default function Root(){
 
             <Routes>
                 <Route path="/" element={
-                    <>
+                    <HomePage>
                         <NavHome />
                         <Home/>
-                    </>
+                    </HomePage>
                 } />
                 <Route path="/paint" element={
                     <>

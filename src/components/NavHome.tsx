@@ -15,19 +15,19 @@ const NavStyle = styled.nav`
 `;
 
 const UlStyle = styled.ul`
-    margin: 2%;
+    margin-top: 2%;
     list-style: none;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     flex-direction: column;
 `;
 
 const LiStyle = styled.li`
-    border: 4px solid #d2e357;
+    border: 5px solid #d2e357;
     border-radius: 10px;
     transition: background-color 0.2s ease-in-out;
     text-align: center;
-    margin: 3%;
+    margin-top: 3%;
     display: flex;
 
     &:hover {
