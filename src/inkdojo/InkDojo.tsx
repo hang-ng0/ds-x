@@ -10,6 +10,7 @@ import { createPoseLandmarker } from './pose'
 import { DEFAULT_INK_SETTINGS, loadInkSettings, saveInkSettings, type InkSettings, type PaperStyle } from './settings'
 import '../fingerpaint/FingerPaint.css'
 import './inkdojo.css'
+import { Link } from "react-router"
 
 // Each ink has a version per paper: neon on dark paper (and rice paper), softer and a little less
 // contrasty on white. The last one is the "base" ink: white on dark paper, near-black elsewhere.
@@ -463,9 +464,10 @@ export default function InkDojo() {
           <button type="button" title="Tune moves and ink (S)" className={panelOpen ? 'active' : ''} onClick={() => setPanelOpen((open) => !open)}>
             <span>⚙️</span>Tune
           </button>
-          <a href={`${import.meta.env.BASE_URL}`} title="Back to the finger painting app">
+          <Link to="/fingerpaint">
             <span>✋</span>Finger Paint
-          </a>
+          </Link>
+          {/*this is where the finger paint button is*/}
         </div>
 
         <pre className="fp-hud" ref={hudRef} hidden={!settings.showHud} />

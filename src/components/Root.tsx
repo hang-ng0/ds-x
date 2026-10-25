@@ -6,6 +6,7 @@ import Home from "../pages/Home";
 import Header from "./Header.tsx";
 import GlobalStyle from "./GlobalStyle.tsx";
 import styled from "styled-components";
+import FingerPaint from "../fingerpaint/FingerPaint.tsx";
 
 const SiteBar = styled.div`
     display: flex;
@@ -50,6 +51,7 @@ export default function Root(){
                         <Gallery />
                     </>
                 } />
+                <Route path="/fingerpaint" element={<FingerPaint/>}/>
             </Routes>
         </>
     )
