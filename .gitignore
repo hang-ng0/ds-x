@@ -22,9 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-# Gesture training: recorded camera images and local training outputs
-gestures*.zip
-exported/
-.venv-train/
-__pycache__/
