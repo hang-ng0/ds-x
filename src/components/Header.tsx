@@ -11,7 +11,7 @@ const H1Style = styled.h1`
 export default function Header() {
     return(
         <header>
-            <H1Style>LITTLE FINGERS</H1Style>
+            <H1Style>Move & Make</H1Style>
         </header>
     )
 }
