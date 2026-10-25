@@ -7,6 +7,7 @@ import Header from "./Header.tsx";
 import GlobalStyle from "./GlobalStyle.tsx";
 import styled from "styled-components";
 import FingerPaint from "../fingerpaint/FingerPaint.tsx";
+import NavHome from "./NavHome.tsx";
 
 const SiteBar = styled.div`
     display: flex;
@@ -30,7 +31,10 @@ export default function Root(){
 
             <Routes>
                 <Route path="/" element={
-                    <Home/>
+                    <>
+                        <NavHome />
+                        <Home/>
+                    </>
                 } />
                 <Route path="/paint" element={
                     <>
