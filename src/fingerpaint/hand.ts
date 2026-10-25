@@ -35,8 +35,10 @@ export const FINGERS = [
 const HANDPRINT_THICKNESS = 0.22
 // Frames a new hand shape must hold before Auto switches brush
 const KIND_FRAMES = 4
+// Window for measuring how fast a pinch is opening: long enough to average out jitter, short enough to react
+const PINCH_SPEED_WINDOW_MS = 100
 
-export async function createRecognizer(model: GestureModel, minConfidence: number) {
+export async function createRecognizer(model: GestureModel, minConfidence: number, numHands: number) {
   // Fetch it ourselves: a missing file would otherwise get the dev server's index.html
   const res = await fetch(MODEL_PATHS[model])
   if (!res.ok || res.headers.get('content-type')?.includes('text/html')) {
@@ -46,7 +48,7 @@ export async function createRecognizer(model: GestureModel, minConfidence: numbe
   const options = (delegate: 'GPU' | 'CPU') => ({
     baseOptions: { modelAssetBuffer, delegate },
     runningMode: 'VIDEO' as const,
-    numHands: 1,
+    numHands,
     minHandDetectionConfidence: minConfidence,
     minHandPresenceConfidence: minConfidence,
     minTrackingConfidence: minConfidence,
@@ -65,13 +67,16 @@ export type Rect = { x: number; y: number; w: number; h: number }
 /** Where the (mirrored, zoomed) camera image lands in client pixels. */
 export type View = Rect
 
-// Covers `area` with the camera image (keeping its aspect), zoomed so only the central
-// `activeArea` fraction of the camera maps onto it
-export function computeView(videoW: number, videoH: number, area: Rect, activeArea: number): View {
+// Covers `area` with the camera image (keeping its aspect), zoomed so only an `activeArea` fraction
+// of the camera maps onto it. `shiftUp` (0–1) moves that region from the middle of the camera image
+// toward its top edge: the wrist hangs well below the fingertip, so reaching the bottom of the paper
+// with a centered region pushes the palm out of the bottom of the image and MediaPipe loses the hand.
+export function computeView(videoW: number, videoH: number, area: Rect, activeArea: number, shiftUp: number): View {
   const s = Math.max(area.w / videoW, area.h / videoH) / activeArea
   const w = videoW * s
   const h = videoH * s
-  return { x: area.x + (area.w - w) / 2, y: area.y + (area.h - h) / 2, w, h }
+  const spareAbove = (h - area.h) / 2
+  return { x: area.x + (area.w - w) / 2, y: area.y - spareAbove + spareAbove * shiftUp, w, h }
 }
 
 export function toScreen(p: NormalizedLandmark | Point, view: View): Point {
@@ -119,8 +124,10 @@ export type HandState = {
   down: boolean
   /** 0 = hand relaxed / open, 1 = right at the press threshold (drives the cursor ring) */
   press: number
-  /** Reach mode: 0 at the "far" calibration, 1 at "near" */
+  /** Fixed reach: 0 at the "far" calibration, 1 at "near" */
   depth: number
+  /** Relative reach: how much bigger the hand looks than at rest (0.15 = 15%) */
+  push: number
   /** Raw palm size, before smoothing (used by calibration) */
   palm: number
   pinch: number
@@ -138,11 +145,14 @@ export class PenTracker {
   private fx = Array.from({ length: 21 }, () => new OneEuroFilter(1, 0))
   private fy = Array.from({ length: 21 }, () => new OneEuroFilter(1, 0))
   private palm: number | null = null
+  private rest: number | null = null
+  private lastTime = 0
   private down = false
   private pending = 0
   private kind: BrushKind = 'pointer'
   private kindCandidate: BrushKind = 'pointer'
   private kindCount = 0
+  private pinchHistory: { t: number; v: number }[] = []
 
   /** `gesturePen`: whether a gesture mapped to "Pen down" is showing (used in gesture pen mode) */
   update(lm: NormalizedLandmark[] | null, timeMs: number, s: Settings, tool: Tool, gesturePen: boolean, view: View, bounds: Rect): HandState | null {
@@ -158,6 +168,21 @@ export class PenTracker {
     // The brush is locked while painting so a stroke never changes type halfway through
     if (!this.down) this.updateKind(tool === 'auto' ? kindFromShape(extended) : tool, tool === 'auto')
 
+    // Resting size: follows the hand while the pen is up and holds still while painting. It catches up
+    // quickly when the hand pulls back, slowly when it approaches, and barely at all once the hand is
+    // halfway into a push, so a deliberate push isn't absorbed before it reaches the press point.
+    const dt = this.rest === null ? 0 : Math.max(timeMs - this.lastTime, 0) / 1000
+    this.lastTime = timeMs
+    if (this.rest === null) {
+      this.rest = this.palm
+    } else if (!this.down) {
+      const growth = this.palm / this.rest - 1
+      const timeConstant =
+        growth < 0 ? s.adaptSeconds / 10 : growth > s.pushAmount / 2 ? s.adaptSeconds * 5 : s.adaptSeconds
+      this.rest += (this.palm - this.rest) * (1 - Math.exp(-dt / timeConstant))
+    }
+    const push = this.palm / this.rest - 1
+
     const depth = (this.palm - s.far) / Math.max(s.near - s.far, 1e-3)
     const pinch = dist(lm[THUMB_TIP], lm[INDEX_TIP], aspect) / rawPalm
     // Pinching changes the hand shape, so only the pointer can use it
@@ -171,19 +196,35 @@ export class PenTracker {
       pastPress = gesturePen
       pastRelease = !gesturePen
     } else if (mode === 'reach') {
-      press = depth / s.pressAt
-      pastPress = depth >= s.pressAt
-      pastRelease = depth < s.pressAt - s.gap
+      const [value, at, release] =
+        s.reachStyle === 'relative' ? [push, s.pushAmount, s.pushAmount - s.pushGap] : [depth, s.pressAt, s.pressAt - s.gap]
+      press = value / at
+      pastPress = value >= at
+      pastRelease = value < release
     } else {
       press = (1 - pinch) / (1 - s.pinchPress)
       pastPress = pinch <= s.pinchPress
       pastRelease = pinch > s.pinchPress + s.pinchGap
     }
 
+    // Pinch lifts the moment the fingers start opening, skipping the lift-frame delay and not waiting
+    // for the release point, so spreading the fingers doesn't drag a line. The pinch distance comes
+    // straight from the landmarks (unsmoothed), so this reacts within a frame or two.
+    const openingSpeed = this.pinchSpeed(pinch, timeMs)
+    const liftNow =
+      this.down &&
+      mode === 'pinch' &&
+      (pastRelease || (s.pinchOpenSpeed > 0 && pinch > s.pinchPress && openingSpeed > s.pinchOpenSpeed))
+
+    // Timing and smoothing come from whichever mode is actually deciding pen down
+    const tuning = s.modeTuning[mode]
     const want = this.down ? !pastRelease : pastPress
-    if (want !== this.down) {
+    if (liftNow) {
+      this.down = false
+      this.pending = 0
+    } else if (want !== this.down) {
       this.pending++
-      if (this.pending >= (want ? s.pressFrames : s.liftFrames)) {
+      if (this.pending >= (want ? tuning.pressFrames : tuning.liftFrames)) {
         this.down = want
         this.pending = 0
       }
@@ -194,8 +235,8 @@ export class PenTracker {
     const points = lm.map((p, i) => {
       const target = toScreen(p, view)
       for (const f of [this.fx[i], this.fy[i]]) {
-        f.minCutoff = s.minCutoff
-        f.beta = s.beta
+        f.minCutoff = tuning.minCutoff
+        f.beta = tuning.beta
       }
       return { x: this.fx[i].filter(target.x, timeMs), y: this.fy[i].filter(target.y, timeMs) }
     })
@@ -215,7 +256,8 @@ export class PenTracker {
       y: clamp(cursor.y, bounds.y, bounds.y + bounds.h),
     }
 
-    const widthScale = mode === 'reach' && s.pressure ? clamp(0.7 + (depth - s.pressAt) * 2.5, 0.5, 1.8) : 1
+    // Reaching past the press point thickens the line
+    const widthScale = mode === 'reach' && s.pressure ? clamp(0.7 + (press - 1) * 1.75, 0.5, 1.8) : 1
     return {
       points,
       cursor,
@@ -224,11 +266,21 @@ export class PenTracker {
       down: this.down,
       press: clamp(press, 0, 1.2),
       depth,
+      push,
       palm: rawPalm,
       pinch,
       widthScale,
       printWidth: this.palm * view.w * HANDPRINT_THICKNESS * s.handprint,
     }
+  }
+
+  /** How fast the pinch is opening, in pinch-ratio units per second, over roughly the last 100 ms */
+  private pinchSpeed(pinch: number, timeMs: number) {
+    this.pinchHistory.push({ t: timeMs, v: pinch })
+    while (this.pinchHistory.length > 2 && timeMs - this.pinchHistory[0].t > PINCH_SPEED_WINDOW_MS) this.pinchHistory.shift()
+    const first = this.pinchHistory[0]
+    const dt = (timeMs - first.t) / 1000
+    return dt > 0 ? (pinch - first.v) / dt : 0
   }
 
   private updateKind(kind: BrushKind, debounce: boolean) {
@@ -246,8 +298,10 @@ export class PenTracker {
   reset() {
     for (const f of [...this.fx, ...this.fy]) f.reset()
     this.palm = null
+    this.rest = null
     this.down = false
     this.pending = 0
     this.kindCount = 0
+    this.pinchHistory = []
   }
 }

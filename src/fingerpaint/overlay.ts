@@ -8,42 +8,50 @@ import type { Settings } from './settings'
 const FAR_RING = 44
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
+/** One visible hand */
+export type HandView = {
+  /** Hand slot, shown as "1" / "2" next to the cursor when two hands are visible */
+  id: number
+  hand: HandState
+  color: string
+  overUi: boolean
+  trigger: TriggerState | null
+  /** When this hand's last gesture action fired, for a short flash */
+  firedAt: number
+  firedLabel: string
+}
+
 export type OverlayFrame = {
   w: number
   h: number
   now: number
-  hand: HandState | null
+  hands: HandView[]
   /** The hand-controlled area (toolbars + paper) and the paper itself, in client pixels */
   area: Rect
   paper: Rect
-  color: string
   brush: number
-  overUi: boolean
   calibration: Calibration | null
   handMissingMs: number
-  trigger: TriggerState | null
-  /** When the last gesture action fired, for a short flash */
-  firedAt: number
-  firedLabel: string
 }
 
 /** Full-window layer above everything: cursors, gesture feedback, calibration prompt, hints. */
 export function drawOverlay(ctx: CanvasRenderingContext2D, f: OverlayFrame) {
   ctx.clearRect(0, 0, f.w, f.h)
-  if (f.hand) drawCursor(ctx, f, f.hand)
-  if (f.hand) drawGestureFeedback(ctx, f, f.hand.cursor)
+  for (const v of f.hands) drawCursor(ctx, f, v)
+  if (f.hands.length > 1) for (const v of f.hands) drawHandTag(ctx, v)
+  for (const v of f.hands) drawGestureFeedback(ctx, f.now, v)
   if (f.calibration) drawCalibration(ctx, f, f.calibration)
   else if (f.handMissingMs > 1500) drawHint(ctx, f.paper, 'Show me your hand! ✋')
 }
 
 // While a mapped gesture is held: a filling ring and the action's name. Then a brief flash when it fires.
-function drawGestureFeedback(ctx: CanvasRenderingContext2D, f: OverlayFrame, at: Point) {
-  const flashing = f.now - f.firedAt < 700
-  const t = f.trigger
+function drawGestureFeedback(ctx: CanvasRenderingContext2D, now: number, v: HandView) {
+  const flashing = now - v.firedAt < 700
+  const t = v.trigger
   if (!flashing && (!t || t.progress === 0)) return
-  const text = flashing ? `✓ ${f.firedLabel}` : describeAction(t!.action)
-  const x = at.x + 34
-  const y = at.y - 34
+  const text = flashing ? `✓ ${v.firedLabel}` : describeAction(t!.action)
+  const x = v.hand.cursor.x + 34
+  const y = v.hand.cursor.y - 34
   ctx.save()
   ctx.font = 'bold 16px system-ui, sans-serif'
   const w = ctx.measureText(text).width + 52
@@ -68,11 +76,31 @@ function drawGestureFeedback(ctx: CanvasRenderingContext2D, f: OverlayFrame, at:
   ctx.restore()
 }
 
-function drawCursor(ctx: CanvasRenderingContext2D, f: OverlayFrame, hand: HandState) {
-  const ink = f.color === ERASER ? '#888' : f.color
-  const painting = hand.down && !f.overUi
+// Matches the hand's badge on the toolbar so kids can tell which color is theirs
+function drawHandTag(ctx: CanvasRenderingContext2D, { id, hand, color }: HandView) {
+  const x = hand.cursor.x - 30
+  const y = hand.cursor.y + 30
   ctx.save()
-  if (hand.kind === 'palm' && !f.overUi) {
+  ctx.beginPath()
+  ctx.arc(x, y, 11, 0, Math.PI * 2)
+  ctx.fillStyle = color === ERASER ? '#888' : color
+  ctx.fill()
+  ctx.lineWidth = 2
+  ctx.strokeStyle = '#fff'
+  ctx.stroke()
+  ctx.fillStyle = '#fff'
+  ctx.font = 'bold 13px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(String(id + 1), x, y + 1)
+  ctx.restore()
+}
+
+function drawCursor(ctx: CanvasRenderingContext2D, f: OverlayFrame, { hand, color, overUi }: HandView) {
+  const ink = color === ERASER ? '#888' : color
+  const painting = hand.down && !overUi
+  ctx.save()
+  if (hand.kind === 'palm' && !overUi) {
     // Ghost of the handprint, getting more solid as the hand approaches
     if (!painting) {
       ctx.globalAlpha = 0.12 + 0.3 * Math.min(hand.press, 1)
@@ -81,7 +109,7 @@ function drawCursor(ctx: CanvasRenderingContext2D, f: OverlayFrame, hand: HandSt
       traceHand(ctx, hand.points, hand.printWidth)
     }
     ring(ctx, hand.cursor, painting ? 10 : lerp(FAR_RING * 1.5, 14, Math.min(hand.press, 1)), ink, painting)
-  } else if (hand.kind === 'fingers' && !f.overUi) {
+  } else if (hand.kind === 'fingers' && !overUi) {
     const tip = (f.brush * hand.widthScale) / 2
     FINGERS.forEach(({ tip: i }, k) => {
       if (!hand.extended[k]) return
@@ -119,6 +147,7 @@ function ring(ctx: CanvasRenderingContext2D, p: Point, r: number, ink: string, s
   ctx.fill()
 }
 
+
 function drawCalibration(ctx: CanvasRenderingContext2D, f: OverlayFrame, c: Calibration) {
   const cx = f.paper.x + f.paper.w / 2
   const cy = f.paper.y + f.paper.h / 2
@@ -133,7 +162,7 @@ function drawCalibration(ctx: CanvasRenderingContext2D, f: OverlayFrame, c: Cali
   ctx.fillText(String(c.secondsLeft(f.now)), cx, cy + 60)
   ctx.fillStyle = '#007aff'
   ctx.fillRect(cx - 200, cy + 85, 400 * c.progress(f.now), 8)
-  if (!f.hand) {
+  if (f.hands.length === 0) {
     ctx.font = '20px system-ui, sans-serif'
     ctx.fillStyle = '#c00'
     ctx.fillText("I can't see your hand", cx, cy - 75)
@@ -150,18 +179,20 @@ function drawHint(ctx: CanvasRenderingContext2D, paper: Rect, text: string) {
   ctx.restore()
 }
 
+/** One detected hand in the camera preview; `hand` is its tracked state (null on its first frame). */
+export type PreviewHand = { landmarks: NormalizedLandmark[]; hand: HandState | null }
+
 export type PreviewFrame = {
   w: number
   h: number
-  landmarks: NormalizedLandmark[] | null
-  hand: HandState | null
+  hands: PreviewHand[]
   view: View
   area: Rect
   settings: Settings
   recording: { label: string; countdown: number; progress: number } | null
 }
 
-/** Drawn over the mirrored camera preview: skeleton, the region that maps to the paper, the pen meter, recording status. */
+/** Drawn over the mirrored camera preview: skeletons, the region that maps to the paper, pen meters, recording status. */
 export function drawPreview(ctx: CanvasRenderingContext2D, f: PreviewFrame) {
   drawPreviewContent(ctx, f)
   if (f.recording) drawRecording(ctx, f, f.recording)
@@ -192,7 +223,7 @@ function drawRecording(ctx: CanvasRenderingContext2D, f: PreviewFrame, r: NonNul
     ctx.font = 'bold 14px system-ui, sans-serif'
     ctx.fillStyle = '#fff'
     ctx.fillText(`REC "${r.label}"`, 32, 19)
-    if (!f.landmarks) {
+    if (f.hands.length === 0) {
       ctx.textAlign = 'center'
       ctx.fillText('No hand: not saving', f.w / 2, f.h / 2)
     }
@@ -214,56 +245,50 @@ function drawPreviewContent(ctx: CanvasRenderingContext2D, f: PreviewFrame) {
   ctx.strokeRect(rx, ry, (f.area.w / f.view.w) * f.w, (f.area.h / f.view.h) * f.h)
   ctx.restore()
 
-  if (s.showSkeleton && f.landmarks) {
-    const pts = f.landmarks.map((p) => ({ x: (1 - p.x) * f.w, y: p.y * f.h }))
-    ctx.save()
-    ctx.strokeStyle = f.hand?.down ? '#34c759' : 'rgba(0, 170, 255, 0.9)'
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    for (const { start, end } of HAND_CONNECTIONS) {
-      ctx.moveTo(pts[start].x, pts[start].y)
-      ctx.lineTo(pts[end].x, pts[end].y)
-    }
-    ctx.stroke()
-    // Fingertips: filled when the finger counts as extended
-    FINGERS.forEach(({ tip }, k) => {
-      ctx.beginPath()
-      ctx.arc(pts[tip].x, pts[tip].y, 4, 0, Math.PI * 2)
-      ctx.fillStyle = f.hand?.extended[k] ? '#ffcc00' : 'rgba(255, 255, 255, 0.6)'
-      ctx.fill()
-    })
-    ctx.restore()
-  }
-
-  if (s.showHud) drawMeter(ctx, f)
+  if (s.showSkeleton) for (const h of f.hands) drawSkeleton(ctx, f, h)
+  if (s.showHud) f.hands.forEach((h, i) => drawMeter(ctx, f, h.hand, i))
 }
 
-// The signal that decides pen down, with press (green) and release (orange) lines
-function drawMeter(ctx: CanvasRenderingContext2D, f: PreviewFrame) {
-  const s = f.settings
-  const hand = f.hand
-  const usePinch = s.mode === 'pinch' && hand?.kind === 'pointer'
-  const max = 1.3
-  let value: number
-  let press: number
-  let release: number
-  if (s.mode === 'gesture') {
-    value = hand?.press === 1 ? 1 : 0
-    press = 0.9
-    release = 0.5
-  } else if (usePinch) {
-    // Show "closeness" so the bar fills upward as fingers pinch together
-    value = hand ? 1.2 - hand.pinch : 0
-    press = 1.2 - s.pinchPress
-    release = 1.2 - (s.pinchPress + s.pinchGap)
-  } else {
-    value = hand?.depth ?? 0
-    press = s.pressAt
-    release = s.pressAt - s.gap
+function drawSkeleton(ctx: CanvasRenderingContext2D, f: PreviewFrame, { landmarks, hand }: PreviewHand) {
+  const pts = landmarks.map((p) => ({ x: (1 - p.x) * f.w, y: p.y * f.h }))
+  ctx.save()
+  ctx.strokeStyle = hand?.down ? '#34c759' : 'rgba(0, 170, 255, 0.9)'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  for (const { start, end } of HAND_CONNECTIONS) {
+    ctx.moveTo(pts[start].x, pts[start].y)
+    ctx.lineTo(pts[end].x, pts[end].y)
   }
+  ctx.stroke()
+  // Fingertips: filled when the finger counts as extended
+  FINGERS.forEach(({ tip }, k) => {
+    ctx.beginPath()
+    ctx.arc(pts[tip].x, pts[tip].y, 4, 0, Math.PI * 2)
+    ctx.fillStyle = hand?.extended[k] ? '#ffcc00' : 'rgba(255, 255, 255, 0.6)'
+    ctx.fill()
+  })
+  ctx.restore()
+}
+
+/** The signal that decides pen down for this hand, and its press and release thresholds. */
+function meterValues(s: Settings, hand: HandState | null) {
+  if (s.mode === 'gesture') return { value: hand?.press === 1 ? 1 : 0, press: 0.9, release: 0.5, max: 1.3 }
+  if (s.mode === 'pinch' && hand?.kind === 'pointer') {
+    // Show "closeness" so the bar fills upward as fingers pinch together
+    return { value: hand ? 1.2 - hand.pinch : 0, press: 1.2 - s.pinchPress, release: 1.2 - (s.pinchPress + s.pinchGap), max: 1.3 }
+  }
+  if (s.reachStyle === 'relative') {
+    return { value: hand?.push ?? 0, press: s.pushAmount, release: s.pushAmount - s.pushGap, max: Math.max(s.pushAmount * 2, 0.3) }
+  }
+  return { value: hand?.depth ?? 0, press: s.pressAt, release: s.pressAt - s.gap, max: 1.3 }
+}
+
+// Bar on the right edge (one per hand), with press (green) and release (orange) lines
+function drawMeter(ctx: CanvasRenderingContext2D, f: PreviewFrame, hand: HandState | null, index: number) {
+  const { value, press, release, max } = meterValues(f.settings, hand)
   const mw = 12
   const mh = f.h - 24
-  const mx = f.w - mw - 10
+  const mx = f.w - mw - 10 - index * (mw + 14)
   const my = 12
   const yOf = (v: number) => my + mh - (Math.min(Math.max(v, 0), max) / max) * mh
   ctx.save()
@@ -282,17 +307,21 @@ function drawMeter(ctx: CanvasRenderingContext2D, f: PreviewFrame) {
   ctx.restore()
 }
 
-export function hudText(s: Settings, hand: HandState | null, fps: number, gesture: string, overUi: boolean) {
-  return [
-    `${fps.toFixed(0)} fps   model ${s.gestureModel}`,
-    `pen-down by ${s.mode}`,
-    `gesture  ${gesture || '–'}`,
-    hand ? `brush    ${hand.kind}` : 'no hand',
-    hand ? `fingers  ${FINGERS.filter((_, k) => hand.extended[k]).map((f) => f.name).join(' ') || '–'}` : '',
-    hand ? `palm     ${hand.palm.toFixed(3)}  (far ${s.far.toFixed(3)} / near ${s.near.toFixed(3)})` : '',
-    hand ? `depth    ${hand.depth.toFixed(2)}   pinch ${hand.pinch.toFixed(2)}` : '',
-    hand ? `pen      ${hand.down ? 'DOWN' : 'up'}${overUi ? ' (over button)' : ''}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n')
+export type HudHand = { hand: HandState; gesture: string; overUi: boolean }
+
+export function hudText(s: Settings, hands: HudHand[], fps: number) {
+  const reach = s.reachStyle === 'relative' ? 'relative' : 'fixed'
+  const lines = [`${fps.toFixed(0)} fps   model ${s.gestureModel}`, `pen-down by ${s.mode}${s.mode === 'reach' ? ` (${reach})` : ''}`]
+  if (hands.length === 0) lines.push('no hand')
+  hands.forEach(({ hand, gesture, overUi }, i) => {
+    const fingers = FINGERS.filter((_, k) => hand.extended[k]).map((f) => f.name).join(' ') || '–'
+    lines.push(
+      '',
+      `hand ${i + 1}  ${hand.kind}   pen ${hand.down ? 'DOWN' : 'up'}${overUi ? ' (over button)' : ''}`,
+      `  gesture ${gesture || '–'}`,
+      `  fingers ${fingers}`,
+      `  push ${(hand.push * 100).toFixed(0)}%   depth ${hand.depth.toFixed(2)}   pinch ${hand.pinch.toFixed(2)}`,
+    )
+  })
+  return lines.join('\n')
 }

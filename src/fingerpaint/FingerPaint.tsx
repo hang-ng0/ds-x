@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import type { GestureRecognizer } from '@mediapipe/tasks-vision'
 import { Calibration } from './calibration'
-import { Dwell } from './dwell'
 import GesturePanel from './GesturePanel'
-import { CANNED_GESTURES, describeAction, GestureTrigger, isNoneLabel, topGesture } from './gestures'
-import { computeView, createRecognizer, FINGERS, PenTracker, type Point, type Rect } from './hand'
-import { drawOverlay, drawPreview, hudText } from './overlay'
+import { CANNED_GESTURES, describeAction, isNoneLabel, topGesture } from './gestures'
+import { computeView, createRecognizer, FINGERS, type HandState, type Point, type Rect } from './hand'
+import { assignHands, HandSlot, MAX_HANDS } from './hands'
+import { drawOverlay, drawPreview, hudText, type HandView, type HudHand, type PreviewHand } from './overlay'
 import { ERASER, Painter } from './painter'
 import { BRUSHES, COLORS, TOOLS } from './palette'
 import { Recorder, SampleStore, type RecordingState } from './samples'
@@ -25,6 +25,18 @@ function describeError(err: unknown) {
   return `Couldn't start the camera: ${err instanceof Error ? err.message : String(err)}`
 }
 
+/** Little "1" / "2" tags on a toolbar button showing which hands have it selected */
+function HandBadges({ hands, show }: { hands: number[]; show: boolean }) {
+  if (!show || hands.length === 0) return null
+  return (
+    <span className="fp-badges" aria-hidden>
+      {hands.map((i) => (
+        <span key={i}>{i + 1}</span>
+      ))}
+    </span>
+  )
+}
+
 const round3 = (v: number) => Math.round(v * 1000) / 1000
 const toRect = (r: DOMRect): Rect => ({ x: r.left, y: r.top, w: r.width, h: r.height })
 
@@ -32,13 +44,15 @@ export default function FingerPaint() {
   const workspaceRef = useRef<HTMLDivElement>(null)
   const paperRef = useRef<HTMLDivElement>(null)
   const paintRef = useRef<HTMLCanvasElement>(null)
+  const layerRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const previewRef = useRef<HTMLCanvasElement>(null)
   const hudRef = useRef<HTMLPreElement>(null)
 
   const [settings, setSettings] = useState<Settings>(loadSettings)
-  const [color, setColor] = useState(COLORS[4].value)
+  // One color per hand slot (blue and red, so two kids can tell their paint apart). The mouse uses hand 1's.
+  const [colors, setColors] = useState<string[]>([COLORS[4].value, COLORS[0].value])
   const [brush, setBrush] = useState(BRUSHES[1])
   const [tool, setTool] = useState<Tool>('pointer')
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
@@ -53,7 +67,9 @@ export default function FingerPaint() {
 
   // The render loop runs outside React and reads current values through these refs
   const settingsRef = useRef(settings)
-  const brushRef = useRef({ color, size: brush, tool })
+  const brushRef = useRef({ colors, size: brush, tool })
+  // Set while a hand's hover "clicks" a toolbar button, so the click knows which hand it was for
+  const clickingHandRef = useRef<number | null>(null)
   const painterRef = useRef<Painter | null>(null)
   const recognizerRef = useRef<GestureRecognizer | null>(null)
   const recorderRef = useRef<Recorder | null>(null)
@@ -67,8 +83,17 @@ export default function FingerPaint() {
   }, [settings])
 
   useEffect(() => {
-    brushRef.current = { color, size: brush, tool }
-  }, [color, brush, tool])
+    brushRef.current = { colors, size: brush, tool }
+  }, [colors, brush, tool])
+
+  /** `hand` null (a mouse click) sets every hand's color. */
+  const setHandColor = useCallback((hand: number | null, value: string) => {
+    setColors((prev) => prev.map((c, i) => (hand === null || i === hand ? value : c)))
+  }, [])
+
+  useEffect(() => {
+    if (painterRef.current) painterRef.current.opacity = settings.paintOpacity
+  }, [settings.paintOpacity])
 
   useEffect(() => {
     const c = settings.minDetect
@@ -78,6 +103,10 @@ export default function FingerPaint() {
       minTrackingConfidence: c,
     })
   }, [settings.minDetect])
+
+  useEffect(() => {
+    recognizerRef.current?.setOptions({ numHands: settings.twoHands ? MAX_HANDS : 1 })
+  }, [settings.twoHands])
 
   useEffect(() => {
     if (!notice) return
@@ -96,7 +125,7 @@ export default function FingerPaint() {
     let cancelled = false
     let created: GestureRecognizer | null = null
     const model = settings.gestureModel
-    createRecognizer(model, settingsRef.current.minDetect).then(
+    createRecognizer(model, settingsRef.current.minDetect, settingsRef.current.twoHands ? MAX_HANDS : 1).then(
       (recognizer) => {
         if (cancelled) {
           recognizer.close()
@@ -127,6 +156,7 @@ export default function FingerPaint() {
     }
   }, [settings.gestureModel])
 
+  // Calibration also sets the relative push amount: a bit under half of a full reach
   const beginCalibration = useCallback(() => {
     setSettings((prev) => ({ ...prev, mode: 'reach' }))
     calibrationRef.current = new Calibration(performance.now())
@@ -141,11 +171,10 @@ export default function FingerPaint() {
     const hud = hudRef.current!
     const octx = overlay.getContext('2d')!
     const pctx = preview.getContext('2d')!
-    const painter = new Painter(paintRef.current!)
+    const painter = new Painter(paintRef.current!, layerRef.current!)
+    painter.opacity = settingsRef.current.paintOpacity
     painterRef.current = painter
-    const tracker = new PenTracker()
-    const dwell = new Dwell()
-    const trigger = new GestureTrigger()
+    const slots = Array.from({ length: MAX_HANDS }, (_, i) => new HandSlot(i))
     const recorder = new Recorder(
       (sample) => sampleStore.add(sample).then(refreshCounts, () => {}),
       setRecording,
@@ -159,10 +188,8 @@ export default function FingerPaint() {
     let lastFrameTime = 0
     let fps = 0
     let lastSeen = performance.now()
-    let handPainting = false
-    let prevPrint: Point[] | null = null
-    let firedAt = -Infinity
-    let firedLabel = ''
+    // One undo step covers everything from the first hand touching down until the last one lifts
+    let session = false
 
     const sizeCanvas = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, w: number, h: number) => {
       const dpr = window.devicePixelRatio || 1
@@ -180,21 +207,46 @@ export default function FingerPaint() {
     observer.observe(paper)
     observer.observe(preview)
 
-    const endHandStrokes = () => {
-      for (const f of FINGERS) painter.end(f.name)
-      handPainting = false
-      prevPrint = null
+    const stopHand = (slot: HandSlot) => {
+      for (const f of FINGERS) painter.end(slot.strokeId(f.name))
+      slot.painting = false
+      slot.prevPrint = null
     }
 
-    const applyAction = (action: GestureAction) => {
+    const paintHand = (slot: HandSlot, hand: HandState, local: (p: Point) => Point, color: string, size: number) => {
+      if (!session) {
+        painter.checkpoint()
+        session = true
+      }
+      slot.painting = true
+      if (hand.kind === 'palm') {
+        const pts = hand.points.map(local)
+        painter.stampHand(pts, slot.prevPrint, hand.printWidth, color)
+        slot.prevPrint = pts
+        return
+      }
+      // Pointer paints with the index finger only; Fingers paints with every extended finger
+      const width = size * hand.widthScale
+      FINGERS.forEach((f, i) => {
+        const id = slot.strokeId(f.name)
+        const active = hand.kind === 'pointer' ? f.name === 'index' : hand.extended[i]
+        if (!active) return painter.end(id)
+        const p = local(hand.kind === 'pointer' ? hand.cursor : hand.points[f.tip])
+        if (painter.has(id)) painter.extend(id, p, width)
+        else painter.begin(id, p, width, color)
+      })
+    }
+
+    // Color actions apply to the hand that made the gesture
+    const applyAction = (action: GestureAction, hand: number) => {
       if (action === 'undo') painter.undo()
       else if (action === 'clear') painter.clear()
-      else if (action === 'eraser') setColor(ERASER)
+      else if (action === 'eraser') setHandColor(hand, ERASER)
       else if (action === 'nextColor') {
-        const i = COLORS.findIndex((c) => c.value === brushRef.current.color)
-        setColor(COLORS[(i + 1) % COLORS.length].value)
+        const i = COLORS.findIndex((c) => c.value === brushRef.current.colors[hand])
+        setHandColor(hand, COLORS[(i + 1) % COLORS.length].value)
       } else if (action.startsWith('tool:')) setTool(action.slice(5) as Tool)
-      else if (action.startsWith('color:')) setColor(action.slice(6))
+      else if (action.startsWith('color:')) setHandColor(hand, action.slice(6))
       else if (action.startsWith('brush:')) setBrush(Number(action.slice(6)))
     }
 
@@ -209,34 +261,75 @@ export default function FingerPaint() {
 
       const result = recognizer.recognizeForVideo(video, now)
       const s = settingsRef.current
-      const { color, size, tool } = brushRef.current
+      const { colors, size, tool } = brushRef.current
       const area = toRect(workspace.getBoundingClientRect())
       const paperRect = toRect(paper.getBoundingClientRect())
-      const landmarks = result.landmarks[0] ?? null
-      const gesture = topGesture(result.gestures[0], s)
-      if (gesture && !seenLabelsRef.current.has(gesture.label)) {
-        seenLabelsRef.current.add(gesture.label)
-        setSeenLabels([...seenLabelsRef.current])
+      const local = (p: Point) => ({ x: p.x - paperRect.x, y: p.y - paperRect.y })
+      const view = computeView(video.videoWidth, video.videoHeight, area, s.activeArea, s.areaShiftUp)
+      const calibrating = !!calibrationRef.current
+      recorder.update(now, result.landmarks.length > 0, video)
+
+      const views: HandView[] = []
+      const previewHands: PreviewHand[] = []
+      const hudHands: HudHand[] = []
+      const assignment = assignHands(slots, result.landmarks)
+      slots.forEach((slot, i) => {
+        const d = assignment[i]
+        const landmarks = d === null ? null : result.landmarks[d]
+        const gesture = d === null ? null : topGesture(result.gestures[d], s)
+        if (gesture && !seenLabelsRef.current.has(gesture.label)) {
+          seenLabelsRef.current.add(gesture.label)
+          setSeenLabels([...seenLabelsRef.current])
+        }
+        const gesturePen = !!gesture && s.gestureActions[gesture.label] === 'penDown'
+        const hand = slot.tracker.update(landmarks, now, s, tool, gesturePen, view, area)
+
+        // Toolbar buttons are pressed by hovering; never paint while pointing at UI
+        const hit = hand ? document.elementFromPoint(hand.cursor.x, hand.cursor.y) : null
+        const overUi = !!hit?.closest('[data-ui]')
+        clickingHandRef.current = slot.id
+        slot.dwell.update(hit?.closest<HTMLElement>('[data-dwell]') ?? null, now)
+        clickingHandRef.current = null
+
+        // Gesture actions: not while painting, calibrating, or recording training images
+        const trigger = slot.trigger.update(gesture?.label ?? null, now, s, !!hand && !hand.down && !calibrating && !recorder.active)
+        if (trigger?.fired) {
+          applyAction(trigger.action, slot.id)
+          slot.firedAt = now
+          slot.firedLabel = describeAction(trigger.action)
+        }
+
+        const color = colors[slot.id]
+        if (hand?.down && !overUi && !calibrating && !pointerDrawingRef.current) paintHand(slot, hand, local, color, size)
+        else if (slot.painting) stopHand(slot)
+
+        if (landmarks) previewHands.push({ landmarks, hand })
+        if (hand) {
+          views.push({ id: slot.id, hand, color, overUi, trigger, firedAt: slot.firedAt, firedLabel: slot.firedLabel })
+          const top = result.gestures[d!]?.[0]
+          hudHands.push({ hand, overUi, gesture: top ? `${top.categoryName} ${top.score.toFixed(2)}` : '' })
+        }
+      })
+      if (views.length) lastSeen = now
+
+      // Blend the painting in once every hand has lifted
+      if (session && !slots.some((slot) => slot.painting) && !pointerDrawingRef.current) {
+        painter.commit()
+        session = false
       }
-      const gesturePen = !!gesture && s.gestureActions[gesture.label] === 'penDown'
-      const view = computeView(video.videoWidth, video.videoHeight, area, s.activeArea)
-      const hand = tracker.update(landmarks, now, s, tool, gesturePen, view, area)
-      if (hand) lastSeen = now
-
-      recorder.update(now, !!landmarks, video)
-
-      // Toolbar buttons are pressed by hovering; never paint while pointing at UI
-      const hit = hand ? document.elementFromPoint(hand.cursor.x, hand.cursor.y) : null
-      const overUi = !!hit?.closest('[data-ui]')
-      dwell.update(hit?.closest<HTMLElement>('[data-dwell]') ?? null, now)
 
       const calibration = calibrationRef.current
       if (calibration) {
-        const res = calibration.update(hand?.palm ?? null, now)
+        const res = calibration.update(views[0]?.hand.palm ?? null, now)
         if (res) {
           calibrationRef.current = null
           if (res.ok) {
-            setSettings((prev) => ({ ...prev, far: round3(res.far), near: round3(res.near) }))
+            setSettings((prev) => ({
+              ...prev,
+              far: round3(res.far),
+              near: round3(res.near),
+              pushAmount: round3(Math.min(Math.max(0.45 * (res.near / res.far - 1), 0.05), 0.5)),
+            }))
             setNotice('Calibrated! Reach out to paint.')
           } else {
             setNotice("Couldn't see much difference. Try again and reach closer to the screen.")
@@ -244,82 +337,34 @@ export default function FingerPaint() {
         }
       }
 
-      // Gesture actions: not while painting, calibrating, or recording training images
-      const triggerState = trigger.update(
-        gesture?.label ?? null,
-        now,
-        s,
-        !!hand && !hand.down && !calibrationRef.current && !recorder.active,
-      )
-      if (triggerState?.fired) {
-        applyAction(triggerState.action)
-        firedAt = now
-        firedLabel = describeAction(triggerState.action)
-      }
-
-      // A mouse stroke took over the painter
-      if (pointerDrawingRef.current && handPainting) endHandStrokes()
-      const local = (p: Point) => ({ x: p.x - paperRect.x, y: p.y - paperRect.y })
-      if (hand?.down && !overUi && !calibrationRef.current && !pointerDrawingRef.current) {
-        if (!handPainting) {
-          painter.checkpoint()
-          handPainting = true
-        }
-        if (hand.kind === 'palm') {
-          const pts = hand.points.map(local)
-          painter.stampHand(pts, prevPrint, hand.printWidth, color)
-          prevPrint = pts
-        } else {
-          // Pointer paints with the index finger only; Fingers paints with every extended finger
-          const width = size * hand.widthScale
-          FINGERS.forEach((f, i) => {
-            const active = hand.kind === 'pointer' ? f.name === 'index' : hand.extended[i]
-            if (!active) return painter.end(f.name)
-            const p = local(hand.kind === 'pointer' ? hand.cursor : hand.points[f.tip])
-            if (painter.has(f.name)) painter.extend(f.name, p, width)
-            else painter.begin(f.name, p, width, color)
-          })
-        }
-      } else if (handPainting) {
-        endHandStrokes()
-      }
-
       drawOverlay(octx, {
         w: window.innerWidth,
         h: window.innerHeight,
         now,
-        hand,
+        hands: views,
         area,
         paper: paperRect,
-        color,
         brush: size,
-        overUi,
         calibration: calibrationRef.current,
         handMissingMs: now - lastSeen,
-        trigger: triggerState,
-        firedAt,
-        firedLabel,
       })
       drawPreview(pctx, {
         w: preview.clientWidth,
         h: preview.clientHeight,
-        landmarks,
-        hand,
+        hands: previewHands,
         view,
         area,
         settings: s,
         recording: recorder.status(now),
       })
-      if (s.showHud) {
-        const top = result.gestures[0]?.[0]
-        hud.textContent = hudText(s, hand, fps, top ? `${top.categoryName} ${top.score.toFixed(2)}` : '', overUi)
-      }
+      if (s.showHud) hud.textContent = hudText(s, hudHands, fps)
     }
 
     const start = async () => {
       try {
         const media = await navigator.mediaDevices.getUserMedia({
-          video: { width: 640, height: 480, facingMode: 'user' },
+          // 30 fps where the camera allows it: many webcams default lower in dim light, which makes tracking choppy
+          video: { width: 640, height: 480, frameRate: { ideal: 30 }, facingMode: 'user' },
           audio: false,
         })
         if (cancelled) {
@@ -348,7 +393,7 @@ export default function FingerPaint() {
       recorderRef.current = null
       painterRef.current = null
     }
-  }, [sampleStore, refreshCounts])
+  }, [sampleStore, refreshCounts, setHandColor])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -389,11 +434,17 @@ export default function FingerPaint() {
           .filter((l) => !isNoneLabel(l))
           .sort()
 
+  // Which hands (by slot) currently have this color; with one-hand tracking only hand 1 counts
+  const handsWith = (value: string) =>
+    colors.flatMap((c, i) => (c === value && (settings.twoHands || i === 0) ? [i] : []))
+
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId)
     pointerDrawingRef.current = true
+    // Finish any hand strokes first so the mouse stroke gets its own undo step
+    painterRef.current?.commit()
     painterRef.current?.checkpoint()
-    painterRef.current?.begin('mouse', { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }, brush, color)
+    painterRef.current?.begin('mouse', { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }, brush, colors[0])
   }
   const onPointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
     if (pointerDrawingRef.current) painterRef.current?.extend('mouse', { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }, brush)
@@ -401,7 +452,7 @@ export default function FingerPaint() {
   const onPointerUp = () => {
     if (!pointerDrawingRef.current) return
     pointerDrawingRef.current = false
-    painterRef.current?.end('mouse')
+    painterRef.current?.commit()
   }
 
   return (
@@ -416,20 +467,23 @@ export default function FingerPaint() {
               data-dwell="700"
               aria-label={c.name}
               title={c.name}
-              className={`fp-tool fp-color${color === c.value ? ' selected' : ''}`}
+              className={`fp-tool fp-color${handsWith(c.value).length ? ' selected' : ''}`}
               style={{ '--swatch': c.value } as CSSProperties}
-              onClick={() => setColor(c.value)}
-            />
+              onClick={() => setHandColor(clickingHandRef.current, c.value)}
+            >
+              <HandBadges hands={handsWith(c.value)} show={settings.twoHands} />
+            </button>
           ))}
           <button
             type="button"
             data-dwell="700"
             aria-label="Eraser"
             title="Eraser"
-            className={`fp-tool${color === ERASER ? ' selected' : ''}`}
-            onClick={() => setColor(ERASER)}
+            className={`fp-tool${handsWith(ERASER).length ? ' selected' : ''}`}
+            onClick={() => setHandColor(clickingHandRef.current, ERASER)}
           >
             🧽
+            <HandBadges hands={handsWith(ERASER)} show={settings.twoHands} />
           </button>
         </nav>
 
@@ -478,6 +532,8 @@ export default function FingerPaint() {
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
           />
+          {/* The stroke in progress, shown at the opacity it will be blended in with */}
+          <canvas ref={layerRef} className="fp-paint fp-layer" style={{ opacity: settings.paintOpacity }} />
           {notice && <div className="fp-notice">{notice}</div>}
         </div>
       </main>
@@ -492,14 +548,14 @@ export default function FingerPaint() {
         </div>
 
         <div className="fp-actions">
-          <button type="button" title="Calibrate reach (C)" onClick={beginCalibration}>🎯 Calibrate</button>
+          <button type="button" title="Calibrate reach (C)" onClick={beginCalibration}><span>🎯</span>Calibrate</button>
           <button
             type="button"
             title="Tune the feel (S)"
             className={panel === 'tune' ? 'active' : ''}
             onClick={() => setPanel((p) => (p === 'tune' ? null : 'tune'))}
           >
-            ⚙️ Tune
+            <span>⚙️</span>Tune
           </button>
           <button
             type="button"
@@ -507,7 +563,7 @@ export default function FingerPaint() {
             className={panel === 'gestures' ? 'active' : ''}
             onClick={() => setPanel((p) => (p === 'gestures' ? null : 'gestures'))}
           >
-            🤟 Gestures
+            <span>🤟</span>Gestures
           </button>
         </div>
 

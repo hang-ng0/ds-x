@@ -1,0 +1,166 @@
+/* Ink Dojo builds on the finger paint styles (FingerPaint.css); these are the differences. */
+
+/* No brush rail: the paper takes the full width under the toolbar */
+.ink-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Rice paper; the texture tile is generated at runtime (paperTexture in inkfx.ts) */
+.ink-paper {
+  background-color: #f5eedd;
+  background-size: 256px;
+}
+
+/* Ink soaks into the paper rather than sitting on top of it */
+.ink-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  mix-blend-mode: multiply;
+}
+
+.ink-base {
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.ink-live {
+  pointer-events: none;
+}
+
+.ink-divider {
+  width: 2px;
+  height: calc(var(--tool) * 0.66);
+}
+
+.ink-tip {
+  margin: 0;
+  color: #666;
+  font-size: 13px;
+}
+
+/* The "Finger Paint" link sits in the sidebar button row */
+.fp-actions a {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 4px;
+  border: 1px solid #d0d4dc;
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.fp-actions a span {
+  font-size: 18px;
+}
+
+.ink-demos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ink-demos button {
+  padding: 10px;
+  border: 1px solid #d0d4dc;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* Dark paper: ink adds light instead of soaking in, and glows */
+.ink-dark {
+  background-color: #0b0a12;
+}
+
+.ink-dark .ink-layer {
+  mix-blend-mode: screen;
+}
+
+.ink-glow {
+  display: none;
+  pointer-events: none;
+}
+
+.ink-dark .ink-glow {
+  display: block;
+  filter: blur(14px) saturate(1.5) brightness(1.4);
+  opacity: 0.9;
+}
+
+/* Clean white paper: softer colors, ink darkens where it overlaps (like the rice paper) */
+.ink-white {
+  background-color: #ffffff;
+}
+
+/* Clearing: the old painting fades, swells and blurs away */
+.ink-fade {
+  pointer-events: none;
+  transition: opacity 0.8s ease-out, transform 0.8s ease-out, filter 0.8s ease-out;
+}
+
+.ink-fade.gone {
+  opacity: 0;
+  transform: scale(1.05);
+  filter: blur(8px);
+}
+
+/* Paper buttons in the toolbar: each shows its paper, with a dab of ink to hint at the look */
+.ink-paper-btn::before {
+  content: '';
+  position: absolute;
+  inset: 26%;
+  border-radius: 50%;
+}
+
+.ink-paper-dark {
+  background: #0b0a12;
+}
+
+.ink-paper-dark::before {
+  background: #ff2bd6;
+  box-shadow: 0 0 8px 2px #ff2bd6;
+}
+
+.ink-paper-white {
+  background: #ffffff;
+}
+
+.ink-paper-white::before {
+  background: #2a9fd6;
+}
+
+.ink-paper-light {
+  background: #f5eedd;
+}
+
+.ink-paper-light::before {
+  background: #141414;
+}
+
+/* Saving: a quick camera flash over the paper */
+.ink-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  pointer-events: none;
+  animation: ink-flash 0.6s ease-out forwards;
+}
+
+@keyframes ink-flash {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0;
+  }
+}
