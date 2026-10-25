@@ -3,6 +3,8 @@
 /* No brush rail: the paper takes the full width under the toolbar */
 .ink-workspace {
   grid-template-columns: minmax(0, 1fr);
+  min-height: 100vh;
+  /*having a greater space to work on so increasing the height */
 }
 
 /* Rice paper; the texture tile is generated at runtime (paperTexture in inkfx.ts) */
