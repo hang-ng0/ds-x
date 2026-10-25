@@ -1,6 +1,9 @@
 // home page
 import home_bg from "../images/Home Screen.png";
 import styled from "styled-components";
+import Header from "../components/Header.tsx";
+import HomeHeader from "../components/HomeHeader.tsx";
+
 
 const StyledDiv = styled.div`
     width: 100%;
@@ -14,7 +17,9 @@ const StyledDiv = styled.div`
 export default function Home(){
     return(
         <>
-            <StyledDiv></StyledDiv>
+            <HomeHeader/>
+            <StyledDiv>
+            </StyledDiv>
         </>
     )
 }

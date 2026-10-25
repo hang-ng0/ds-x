@@ -29,7 +29,7 @@ export default function Root(){
 
             <Routes>
                 <Route path="/" element={
-                    <Home />
+                    <Home/>
                 } />
                 <Route path="/paint" element={
                     <>

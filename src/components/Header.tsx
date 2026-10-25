@@ -4,7 +4,6 @@ const H1Style = styled.h1`
     color: #2a7099;
     white-space: nowrap;
     padding-left: 6%;
-    
 `;
 
 
