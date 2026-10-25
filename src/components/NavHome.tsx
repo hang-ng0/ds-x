@@ -11,22 +11,26 @@ const NavWrapper = styled.div`
 
 const NavStyle = styled.nav`
     position: absolute;
-    display: flex;
-    flex-direction: column;
 
 `;
 
 const UlStyle = styled.ul`
     margin: 2%;
     list-style: none;
+    display: flex;
 `;
 
 const LiStyle = styled.li`
+    justify-content: space-between;
+    flex-direction: column;
+    width: max-content;
     border: 4px solid #d2e357;
     border-radius: 10px;
     transition: background-color 0.2s ease-in-out;
     text-align: center;
-    margin: 6%;
+    margin: 0.5rem 0;
+    
+    display: flex;
 
 
     &:hover {
@@ -35,10 +39,13 @@ const LiStyle = styled.li`
 `
 
 const LinkStyle = styled(Link)`
+    flex: 1;
+    padding: 3% 8%;
     text-decoration: none;
     color: #105173;
     text-shadow: 1px 1px #072b40, -1px -1px #f8fbfd;
     font-size: calc(2px + 3.3vw);
+    white-space: nowrap;
 `
 
 export default function NavHome(){
