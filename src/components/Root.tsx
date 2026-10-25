@@ -27,15 +27,25 @@ export default function Root(){
         <>
             <GlobalStyle />
 
-            <SiteBar>
-                <Header />
-                <Nav />
-            </SiteBar>
-
             <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/paint" element={<Paint />} />
-                <Route path="/gallery" element={<Gallery />} />
+                <Route path="/" element={
+                    <Home />
+                } />
+                <Route path="/paint" element={
+                    <SiteBar>
+                        <Header />
+                        <Nav />
+                        <Paint />
+                    </SiteBar>
+                } />
+                <Route path="/gallery" element={
+                    <SiteBar>
+                        <Header />
+                        <Nav />
+                        <Paint />
+                        <Gallery />
+                    </SiteBar>
+                } />
             </Routes>
         </>
     )
