@@ -18,7 +18,6 @@ const UlStyle = styled.ul`
     margin-top: 2%;
     list-style: none;
     display: flex;
-    justify-content: center;
     flex-direction: column;
 `;
 
