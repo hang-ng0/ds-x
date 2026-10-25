@@ -73,3 +73,25 @@
     font-size: 40px;
     font-weight: 800;
 }
+
+/*Button Styling*/
+.podium-step button {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 999px; /* pill shape; use 8px for rounded rectangle */
+    background: #2a7099;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.podium-step button:hover {
+    background: #1d5578;
+    transform: translateY(-1px);
+}
+
+.podium-step button:active {
+    transform: translateY(1px);
+}
