@@ -3,8 +3,8 @@ import {Link} from "react-router";
 import styled from 'styled-components';
 
 const NavWrapper = styled.div`
-    top: 60%;
-    left: 5%;
+    top: 59%;
+    left: 4%;
     position: relative;
     z-index: 10;
 `;
@@ -18,20 +18,17 @@ const UlStyle = styled.ul`
     margin: 2%;
     list-style: none;
     display: flex;
+    justify-content: space-between;
+    flex-direction: column;
 `;
 
 const LiStyle = styled.li`
-    justify-content: space-between;
-    flex-direction: column;
-    width: max-content;
     border: 4px solid #d2e357;
     border-radius: 10px;
     transition: background-color 0.2s ease-in-out;
     text-align: center;
-    margin: 0.5rem 0;
-    
+    margin: 3%;
     display: flex;
-
 
     &:hover {
         background-color: #d2e357;
@@ -40,12 +37,11 @@ const LiStyle = styled.li`
 
 const LinkStyle = styled(Link)`
     flex: 1;
-    padding: 3% 8%;
+    padding: 0.1em 0.8em;
     text-decoration: none;
     color: #105173;
     text-shadow: 1px 1px #072b40, -1px -1px #f8fbfd;
     font-size: calc(2px + 3.3vw);
-    white-space: nowrap;
 `
 
 export default function NavHome(){
