@@ -424,13 +424,13 @@ export default function InkDojo() {
           ))}
           <span className="fp-divider ink-divider" />
           <button type="button" data-dwell="900" aria-label="Undo" title="Undo (Z)" className="fp-tool" onClick={() => inkRef.current?.undo()}>
-            ↩️
+            ↩
           </button>
           <button type="button" data-dwell="1500" aria-label="Clear" title="Clear" className="fp-tool" onClick={() => inkRef.current?.clear()}>
-            🗑️
+              ㄨ
           </button>
           <button type="button" data-dwell="1200" aria-label="Save picture" title="Save picture" className="fp-tool" onClick={savePainting}>
-            🖼️
+              ⤓
           </button>
         </nav>
 
@@ -462,10 +462,10 @@ export default function InkDojo() {
 
         <div className="fp-actions">
           <button type="button" title="Tune moves and ink (S)" className={panelOpen ? 'active' : ''} onClick={() => setPanelOpen((open) => !open)}>
-            <span>⚙️</span>Tune
+            <span>⚙</span>Tune
           </button>
           <Link to="/fingerpaint">
-            <span>✋</span>Finger Paint
+            <span>✌︎</span>Finger Paint
           </Link>
           {/*this is where the finger paint button is*/}
         </div>

@@ -4,7 +4,8 @@
 export type PoseModel = 'lite' | 'full'
 
 /**
- * Dark: glowing neon ink that brightens where it overlaps. White: clean white paper with softer colors.
+ * Dark: glowing neon ink that brightens where it overlaps.
+ * White: clean white paper with softer colors.
  * Light: ink soaking into rice paper.
  */
 export type PaperStyle = 'dark' | 'white' | 'light'
