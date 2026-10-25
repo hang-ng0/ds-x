@@ -11,6 +11,8 @@
 /*right side bar css*/
 .fp-sidebar {
   background-color: #2a7099; /* same blue as your main area */
+  max-height: 100dvh;
+  overflow-y: auto;
 }
 
 /*hide the black data box about what the camera is collecting*/
