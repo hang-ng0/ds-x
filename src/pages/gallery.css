@@ -67,9 +67,9 @@
     color: #222;
 }
 
-.rank-1 .podium-step { height: 200px; background: #f5c542; }
-.rank-2 .podium-step { height: 150px; background: #cfd3d8; }
-.rank-3 .podium-step { height: 110px; background: #d9965b; }
+.rank-1 .podium-step { height: 250px; background: #f5c542; }
+.rank-2 .podium-step { height: 200px; background: #cfd3d8; }
+.rank-3 .podium-step { height: 150px; background: #d9965b; }
 
 .podium-rank {
     font-size: 40px;
