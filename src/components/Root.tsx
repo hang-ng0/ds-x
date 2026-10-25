@@ -11,7 +11,7 @@ const SiteBar = styled.div`
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 2%;
+    padding: 1% 2%;
     background-color: #fff2e2;
     
     border-bottom: 4px dashed #2a7099;
@@ -32,19 +32,23 @@ export default function Root(){
                     <Home />
                 } />
                 <Route path="/paint" element={
-                    <SiteBar>
-                        <Header />
-                        <Nav />
+                    <>
+                        <SiteBar>
+                            <Header />
+                            <Nav />
+                        </SiteBar>
                         <Paint />
-                    </SiteBar>
+                    </>
                 } />
                 <Route path="/gallery" element={
-                    <SiteBar>
-                        <Header />
-                        <Nav />
-                        <Paint />
+                    <>
+                        <SiteBar>
+                            <Header />
+                            <Nav />
+                            <Paint />
+                        </SiteBar>
                         <Gallery />
-                    </SiteBar>
+                    </>
                 } />
             </Routes>
         </>
