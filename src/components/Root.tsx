@@ -12,7 +12,9 @@ const SiteBar = styled.div`
     align-items: center;
     justify-content: space-between;
     padding: 2%;
-    background-color: cyan;
+    background-color: #fff2e2;
+    
+    border-bottom: 4px dashed #2a7099;
 
     @media (max-width: 520px) {
         align-items: flex-start;

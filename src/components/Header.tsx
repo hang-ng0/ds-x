@@ -1,17 +1,17 @@
 import styled from "styled-components";
 
-const HeaderStyle = styled.header`
-    flex-shrink: 0;
-
-    h1 {
-        white-space: nowrap;
-    }
+const H1Style = styled.h1`
+    color: #2a7099;
+    white-space: nowrap;
+    padding-left: 6%;
+    
 `;
+
 
 export default function Header() {
     return(
-        <HeaderStyle>
-            <h1>LITTLE FINGERS</h1>
-        </HeaderStyle>
+        <header>
+            <H1Style>Move & Make</H1Style>
+        </header>
     )
 }

@@ -16,6 +16,7 @@ const LinkStyle = styled(Link)`
     text-decoration: none;
     padding: 0.65rem 1rem;
     border-radius: 0.5rem;
+    color: #2a7099;
 
     &:hover {
         background-color: rgba(0, 0, 0, 0.1);
