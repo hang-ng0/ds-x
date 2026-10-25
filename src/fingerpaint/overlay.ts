@@ -189,47 +189,45 @@ export type PreviewFrame = {
   view: View
   area: Rect
   settings: Settings
-  recording: { label: string; countdown: number; progress: number } | null
 }
 
 /** Drawn over the mirrored camera preview: skeletons, the region that maps to the paper, pen meters, recording status. */
 export function drawPreview(ctx: CanvasRenderingContext2D, f: PreviewFrame) {
   drawPreviewContent(ctx, f)
-  if (f.recording) drawRecording(ctx, f, f.recording)
 }
-
-function drawRecording(ctx: CanvasRenderingContext2D, f: PreviewFrame, r: NonNullable<PreviewFrame['recording']>) {
-  ctx.save()
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  if (r.countdown > 0) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
-    ctx.fillRect(0, 0, f.w, f.h)
-    ctx.fillStyle = '#fff'
-    ctx.font = 'bold 15px system-ui, sans-serif'
-    ctx.fillText(`Get ready: "${r.label}"`, f.w / 2, f.h / 2 - 34)
-    ctx.font = 'bold 54px system-ui, sans-serif'
-    ctx.fillText(String(r.countdown), f.w / 2, f.h / 2 + 12)
-  } else {
-    ctx.strokeStyle = '#ff3b30'
-    ctx.lineWidth = 6
-    ctx.strokeRect(3, 3, f.w - 6, f.h - 6)
-    ctx.fillStyle = '#ff3b30'
-    ctx.fillRect(0, f.h - 6, f.w * r.progress, 6)
-    ctx.beginPath()
-    ctx.arc(18, 18, 7, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.textAlign = 'left'
-    ctx.font = 'bold 14px system-ui, sans-serif'
-    ctx.fillStyle = '#fff'
-    ctx.fillText(`REC "${r.label}"`, 32, 19)
-    if (f.hands.length === 0) {
-      ctx.textAlign = 'center'
-      ctx.fillText('No hand: not saving', f.w / 2, f.h / 2)
-    }
-  }
-  ctx.restore()
-}
+//
+// function drawRecording(ctx: CanvasRenderingContext2D, f: PreviewFrame, r: NonNullable<PreviewFrame['recording']>) {
+//   ctx.save()
+//   ctx.textAlign = 'center'
+//   ctx.textBaseline = 'middle'
+//   if (r.countdown > 0) {
+//     ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
+//     ctx.fillRect(0, 0, f.w, f.h)
+//     ctx.fillStyle = '#fff'
+//     ctx.font = 'bold 15px system-ui, sans-serif'
+//     ctx.fillText(`Get ready: "${r.label}"`, f.w / 2, f.h / 2 - 34)
+//     ctx.font = 'bold 54px system-ui, sans-serif'
+//     ctx.fillText(String(r.countdown), f.w / 2, f.h / 2 + 12)
+//   } else {
+//     ctx.strokeStyle = '#ff3b30'
+//     ctx.lineWidth = 6
+//     ctx.strokeRect(3, 3, f.w - 6, f.h - 6)
+//     ctx.fillStyle = '#ff3b30'
+//     ctx.fillRect(0, f.h - 6, f.w * r.progress, 6)
+//     ctx.beginPath()
+//     ctx.arc(18, 18, 7, 0, Math.PI * 2)
+//     ctx.fill()
+//     ctx.textAlign = 'left'
+//     ctx.font = 'bold 14px system-ui, sans-serif'
+//     ctx.fillStyle = '#fff'
+//     ctx.fillText(`REC "${r.label}"`, 32, 19)
+//     if (f.hands.length === 0) {
+//       ctx.textAlign = 'center'
+//       ctx.fillText('No hand: not saving', f.w / 2, f.h / 2)
+//     }
+//   }
+//   ctx.restore()
+// }
 
 function drawPreviewContent(ctx: CanvasRenderingContext2D, f: PreviewFrame) {
   ctx.clearRect(0, 0, f.w, f.h)
