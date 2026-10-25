@@ -465,7 +465,7 @@ export default function InkDojo() {
             <span>⚙</span>Tune
           </button>
           <Link to="/fingerpaint">
-            <span>✌︎</span>Finger Paint
+            <span>✋︎︎</span>Finger Paint
           </Link>
           {/*this is where the finger paint button is*/}
         </div>

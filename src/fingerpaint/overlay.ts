@@ -41,7 +41,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, f: OverlayFrame) {
   if (f.hands.length > 1) for (const v of f.hands) drawHandTag(ctx, v)
   for (const v of f.hands) drawGestureFeedback(ctx, f.now, v)
   if (f.calibration) drawCalibration(ctx, f, f.calibration)
-  else if (f.handMissingMs > 1500) drawHint(ctx, f.paper, 'Show me your hand! ✋')
+  else if (f.handMissingMs > 1500) drawHint(ctx, f.paper, 'Show me your hand!')
 }
 
 // While a mapped gesture is held: a filling ring and the action's name. Then a brief flash when it fires.

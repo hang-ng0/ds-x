@@ -457,10 +457,10 @@ export default function FingerPaint() {
                     ))}
                     <span className="fp-divider" />
                     <button type="button" data-dwell="900" aria-label="Undo" title="Undo" className="fp-tool" onClick={() => painterRef.current?.undo()}>
-                        ↩️
+                        ↩
                     </button>
                     <button type="button" data-dwell="1500" aria-label="Clear" title="Clear" className="fp-tool" onClick={() => painterRef.current?.clear()}>
-                        🗑️
+                        ✗
                     </button>
                 </nav>
 
@@ -489,14 +489,15 @@ export default function FingerPaint() {
                 </div>
 
                 <div className="fp-actions">
-                    <button type="button" title="Calibrate reach (C)" onClick={beginCalibration}><span>🎯</span>Calibrate</button>
+                    <button type="button" title="Calibrate reach (C)" onClick={beginCalibration}>
+                        <span>🛠</span>Tune</button>
                     <button
                         type="button"
                         title="Tune the feel (S)"
                         className={panel === 'tune' ? 'active' : ''}
                         onClick={() => setPanel((p) => (p === 'tune' ? null : 'tune'))}
                     >
-                        <span>⚙️</span>Tune
+                        <span>⚙</span>Tune
                     </button>
                     <button
                         type="button"
@@ -504,7 +505,7 @@ export default function FingerPaint() {
                         className={panel === 'gestures' ? 'active' : ''}
                         onClick={() => setPanel((p) => (p === 'gestures' ? null : 'gestures'))}
                     >
-                        <span>🤟</span>Gestures
+                        <span>✌︎</span>Gestures
                     </button>
                 </div>
 
