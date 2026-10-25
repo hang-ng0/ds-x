@@ -25,6 +25,7 @@ body,
   gap: 12px;
   padding: 12px;
   min-height: 0;
+  background-color: #2a7099;
 }
 
 .fp-overlay {
