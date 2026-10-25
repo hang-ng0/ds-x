@@ -3,8 +3,11 @@
 
 export type PoseModel = 'lite' | 'full'
 
-/** Dark: glowing neon ink that brightens where it overlaps. Light: ink soaking into rice paper. */
-export type PaperStyle = 'dark' | 'light'
+/**
+ * Dark: glowing neon ink that brightens where it overlaps. White: clean white paper with softer colors.
+ * Light: ink soaking into rice paper.
+ */
+export type PaperStyle = 'dark' | 'white' | 'light'
 
 export type InkSettings = {
   model: PoseModel
@@ -22,6 +25,13 @@ export type InkSettings = {
   kickLift: number
   // A jump: the hips rise at least this far above standing height
   jumpHeight: number
+  // An arm wave (flap): both hands, out to the sides, move up or down together at least this fast
+  flapSpeed: number
+  // A head shake: the head swings side to side at least this far, several times in about a second
+  shakeSwing: number
+  // Crossing the forearms in an X and holding still this long clears the painting
+  xClear: boolean
+  clearHoldSeconds: number
   // A short pause per limb after a move, so one punch doesn't fire twice
   cooldownMs: number
   // Ignore hands/feet MediaPipe isn't confident it can see (e.g. off the bottom of the camera)
@@ -34,6 +44,8 @@ export type InkSettings = {
   splatter: number
   drips: boolean
   inkOpacity: number
+  // How much slower movement fades the paint (dimmer on dark paper, paler on light): 0 = off, 1 = full
+  speedGradient: number
   showSkeleton: boolean
   showHud: boolean
 }
@@ -46,10 +58,15 @@ export const DEFAULT_INK_SETTINGS: InkSettings = {
   slashSpeed: 4.5,
   kickSpeed: 4,
   slashLength: 1,
-  punchSpeed: 4,
-  punchExtend: 0.45,
+  // Punches are a bit easier than other moves: from a distance the arm looks small and its depth is rough
+  punchSpeed: 3,
+  punchExtend: 0.32,
   kickLift: 0.55,
   jumpHeight: 0.22,
+  flapSpeed: 3.5,
+  shakeSwing: 0.12,
+  xClear: true,
+  clearHoldSeconds: 2.5,
   cooldownMs: 400,
   minVisibility: 0.65,
   activeArea: 0.85,
@@ -58,12 +75,13 @@ export const DEFAULT_INK_SETTINGS: InkSettings = {
   splatter: 1,
   drips: true,
   inkOpacity: 0.95,
+  speedGradient: 0.85,
   showSkeleton: true,
   showHud: true,
 }
 
 // Bumped when the defaults change a lot, so earlier saved tuning doesn't hide them
-const STORAGE_KEY = 'inkdojo-settings-v2'
+const STORAGE_KEY = 'inkdojo-settings-v3'
 
 export function loadInkSettings(): InkSettings {
   const settings = { ...DEFAULT_INK_SETTINGS }

@@ -1,4 +1,5 @@
-// Animated ink effects: punch blots, brush slashes (arm sweeps and kicks) and jump splashes.
+// Animated ink effects: punch blots, brush slashes (arm sweeps and kicks), edge splashes (jumps and arm
+// waves) and the head-shake spray.
 //
 // Each effect animates on its own offscreen canvas with fully opaque ink, so a single effect never
 // darkens where it overlaps itself. The live layer shows effects in progress; when one finishes it
@@ -66,13 +67,15 @@ class Droplet {
   landY: number
   /** Leave a thinning streak for this long after launch (jump tendrils) */
   streakFor: number
+  /** Its own color, e.g. the brush color where a slash flung it; otherwise the effect's color */
+  color: string | null
   age = 0
   alive = true
   apexed = false
 
   constructor(
     x: number, y: number, vx: number, vy: number, r: number,
-    o: { drag: number; gravity: number; life: number; landY?: number; streakFor?: number },
+    o: { drag: number; gravity: number; life: number; landY?: number; streakFor?: number; color?: string },
   ) {
     this.x = x
     this.y = y
@@ -84,6 +87,7 @@ class Droplet {
     this.life = o.life
     this.landY = o.landY ?? Infinity
     this.streakFor = o.streakFor ?? 0
+    this.color = o.color ?? null
   }
 
   /** Moves the drop; draws onto the effect's own (persistent) canvas only for a streak or the final splat */
@@ -182,15 +186,37 @@ class Drip {
 
 type FxOptions = { splatter: number; drips: boolean }
 
+/** Paint strength (0–1) from speed as a multiple of the move's threshold: faint below ~0.6×, full by ~2× */
+const strengthFromSpeed = (ratio: number) => clamp01((ratio - 0.6) / 1.4)
+/** Paint strength (0–1) from a move's power (1 = just past the threshold, 3 = huge) */
+const strengthFromPower = (power: number) => clamp01((power - 1) / 1.5)
+
+/**
+ * A less-neon version of a color, for slower moves. On dark paper it goes dimmer and greyer (screen
+ * blending makes dark colors faint); on light paper it goes paler, like watered-down paint.
+ * `mix` 1 = the color unchanged.
+ */
+function shade(hex: string, mix: number, dark: boolean) {
+  if (mix >= 0.999 || !hex.startsWith('#')) return hex
+  const n = parseInt(hex.slice(1), 16)
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+  const lum = 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]
+  const weak = c.map((v) => (dark ? (v * 0.35 + lum * 0.65) * 0.3 : v + (255 - v) * 0.78))
+  const out = c.map((v, i) => Math.round(weak[i] + (v - weak[i]) * mix))
+  return `rgb(${out[0]}, ${out[1]}, ${out[2]})`
+}
+
 abstract class Effect {
   readonly canvas: HTMLCanvasElement
   protected ctx: Ctx
   protected age = 0
   protected rand: Rand
   protected droplets: Droplet[] = []
+  protected color: string
 
   constructor(canvas: HTMLCanvasElement, color: string, seed: number) {
     this.canvas = canvas
+    this.color = color
     this.ctx = canvas.getContext('2d')!
     this.ctx.fillStyle = color
     this.ctx.strokeStyle = color
@@ -204,12 +230,19 @@ abstract class Effect {
 
   /** Things in motion that shouldn't leave a mark yet (drops in flight), drawn on the live layer */
   drawTransient(ctx: Ctx) {
-    ctx.fillStyle = this.ctx.fillStyle
-    for (const d of this.droplets) d.drawHead(ctx)
+    for (const d of this.droplets) {
+      ctx.fillStyle = d.color ?? this.color
+      d.drawHead(ctx)
+    }
   }
 
   protected stepDroplets(dt: number) {
-    for (const d of this.droplets) d.step(this.ctx, dt)
+    const ctx = this.ctx
+    for (const d of this.droplets) {
+      ctx.fillStyle = ctx.strokeStyle = d.color ?? this.color
+      d.step(ctx, dt)
+    }
+    ctx.fillStyle = ctx.strokeStyle = this.color
     return this.droplets.every((d) => !d.alive)
   }
 }
@@ -366,8 +399,17 @@ class SlashEffect extends Effect {
   private flung = false
   private power: number
   private o: FxOptions
+  /** Paint color at each point along the stroke (fainter where the hand moved slower) */
+  private colors: string[]
 
-  constructor(canvas: HTMLCanvasElement, color: string, seed: number, path: Pt[], power: number, W: number, heavy: boolean, o: FxOptions) {
+  /**
+   * `strengths`: paint strength (0–1) at each input path point, from how fast it moved there.
+   * `tone` turns a strength into a color.
+   */
+  constructor(
+    canvas: HTMLCanvasElement, color: string, seed: number, path: Pt[], power: number, W: number, heavy: boolean, o: FxOptions,
+    strengths: number[] | null, tone: (strength: number) => string,
+  ) {
     super(canvas, color, seed)
     const rand = this.rand
     this.power = power
@@ -391,6 +433,14 @@ class SlashEffect extends Effect {
       return { x: -(b.y - a.y) / len, y: (b.x - a.x) / len }
     })
     this.s = pts.map((_, i) => i / Math.max(pts.length - 1, 1))
+    const profile = strengthProfile(path, strengths)
+    const cache = new Map<number, string>()
+    this.colors = this.s.map((s) => {
+      // Quantized so a stroke only needs a handful of distinct colors
+      const q = Math.round(profile(s) * 20) / 20
+      if (!cache.has(q)) cache.set(q, tone(q))
+      return cache.get(q)!
+    })
     this.duration = 0.14 + 0.06 * power + (heavy ? 0.06 : 0)
     const K = Math.round(10 + 4 * power + (heavy ? 6 : 0))
     this.bristles = Array.from({ length: K }, (_, k) => {
@@ -425,6 +475,7 @@ class SlashEffect extends Effect {
     const upto = Math.floor(reveal * (n - 1))
     for (let i = Math.max(this.drawn, 1); i <= upto; i++) {
       const s = this.s[i]
+      ctx.fillStyle = ctx.strokeStyle = this.colors[i]
       // Solid body of the stroke for the first part
       if (s < 0.7) {
         const a0 = this.at(i - 1, -0.33)
@@ -480,95 +531,155 @@ class SlashEffect extends Effect {
         drag: 4,
         gravity: 150,
         life: range(rand, 0.1, 0.35),
+        color: this.colors[i],
       }),
     )
   }
 }
 
 /**
- * Jump: ink bursts up from the bottom of the paper where the jumper lands. A pool spreads along the
- * bottom, a crown of spikes rises from it, and jets arc up and rain back down.
+ * Strength (0–1) at a fraction `s` of the way along a path, interpolated from per-point strengths by
+ * distance travelled. Without strengths, full strength everywhere.
+ */
+function strengthProfile(path: Pt[], strengths: number[] | null) {
+  if (!strengths || strengths.length !== path.length || path.length < 2) return () => 1
+  const cum = [0]
+  for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y))
+  const total = cum[cum.length - 1] || 1
+  return (s: number) => {
+    const d = Math.min(s, 1) * total
+    const i = Math.max(1, cum.findIndex((c) => c >= d))
+    const k = (d - cum[i - 1]) / (cum[i] - cum[i - 1] || 1)
+    return strengths[i - 1] + (strengths[i] - strengths[i - 1]) * clamp01(k)
+  }
+}
+
+export type Edge = 'bottom' | 'left' | 'right'
+
+/**
+ * Splash from an edge of the paper: the bottom for a jump (where the jumper lands), the sides for an arm
+ * wave. Several pools spread along the edge, each with a crown of spikes, and jets fan out across the
+ * whole stretch, arcing under gravity and spattering wherever they come down.
+ *
+ * Works in an edge frame: `u` runs along the edge, `v` points into the paper.
  */
 class SplashEffect extends Effect {
-  private x: number
-  private floor: number
-  private PW: number
-  private PH: number
-  private shape: (theta: number) => number
-  private crown: { x: number; h: number; w: number; lean: number; delay: number }[]
+  private origin: Pt
+  private along: Pt
+  private inward: Pt
+  private pools: { u: number; w: number; h: number; shape: (theta: number) => number; delay: number }[]
+  private crown: { u: number; base: number; h: number; w: number; lean: number; delay: number }[] = []
   private pending: { delay: number; drop: Droplet }[] = []
 
-  constructor(canvas: HTMLCanvasElement, color: string, seed: number, x: number, floor: number, power: number, paperW: number, paperH: number, scale: number, o: FxOptions) {
+  constructor(
+    canvas: HTMLCanvasElement, color: string, seed: number, edge: Edge, pos: number, power: number,
+    paperW: number, paperH: number, scale: number, o: FxOptions,
+  ) {
     super(canvas, color, seed)
     const rand = this.rand
-    this.x = x
-    this.floor = floor
-    this.PW = paperW * (0.1 + 0.07 * power) * scale
-    this.PH = paperH * (0.05 + 0.025 * power) * scale
-    this.shape = wobble(rand, 0.18)
-    const gravity = 2400
-    const jets = Math.round((6 + 4 * power) * o.splatter)
+    const bottom = edge === 'bottom'
+    this.origin = bottom ? { x: pos, y: paperH } : { x: edge === 'left' ? 0 : paperW, y: pos }
+    this.along = bottom ? { x: 1, y: 0 } : { x: 0, y: 1 }
+    this.inward = bottom ? { x: 0, y: -1 } : { x: edge === 'left' ? 1 : -1, y: 0 }
+    const span = bottom ? paperW : paperH
+    const depth = bottom ? paperH : paperW
+    // Half-width of the stretch of edge the splash covers: wide along the bottom, narrower on a side
+    const spread = span * (bottom ? 0.2 + 0.08 * power : 0.1 + 0.05 * power) * scale
+
+    const poolCount = bottom ? 2 + Math.round(power) : 1 + Math.round(power / 2)
+    this.pools = Array.from({ length: poolCount }, (_, i) => ({
+      u: i === 0 ? 0 : range(rand, -1, 1) * spread,
+      w: span * range(rand, 0.05, 0.1) * Math.sqrt(power) * scale * (i === 0 ? 1.4 : 1),
+      h: depth * range(rand, 0.03, 0.05) * (0.8 + 0.2 * power) * scale * (i === 0 ? 1.3 : 1),
+      shape: wobble(rand, 0.18),
+      delay: i === 0 ? 0 : range(rand, 0.03, 0.15),
+    }))
+    for (const pool of this.pools) {
+      const n = Math.round(3 + 2 * power * (pool.w / (span * 0.1)))
+      for (let i = 0; i < n; i++) {
+        const k = range(rand, -0.45, 0.45)
+        this.crown.push({
+          u: pool.u + k * pool.w,
+          base: pool.h * 0.5,
+          h: pool.h * range(rand, 0.4, 1.4),
+          w: range(rand, 4, 10) * scale,
+          lean: k * 1.4 + gauss(rand) * 0.15,
+          delay: pool.delay + range(rand, 0.04, 0.18),
+        })
+      }
+    }
+
+    const gravity = bottom ? 2400 : 1800
+    const jets = Math.round((bottom ? 12 + 7 * power : 7 + 4 * power) * o.splatter)
     for (let i = 0; i < jets; i++) {
-      const x0 = x + gauss(rand) * this.PW * 0.35
-      // Jets lean outward the farther they start from the middle
-      const lean = ((x0 - x) / (this.PW / 2)) * 0.6 + gauss(rand) * 0.25
-      const h = Math.min(paperH * range(rand, 0.12, 0.4) * power ** 0.6 * scale, paperH * 0.85)
-      const v0 = Math.sqrt(2 * gravity * h)
-      const drop = new Droplet(x0, floor - this.PH * 0.6, Math.sin(lean) * v0, -Math.cos(lean) * v0, range(rand, 3, 7) * (0.8 + 0.2 * power) * scale, {
+      const u0 = range(rand, -1, 1) * spread
+      // Jets fan outward: the farther along the edge they start, the more they lean that way
+      const lean = (u0 / spread) * 0.9 + gauss(rand) * 0.3
+      const reach = depth * (bottom ? range(rand, 0.08, 0.38) : range(rand, 0.06, 0.28)) * power ** 0.6 * scale
+      const v0 = bottom ? Math.sqrt(2 * gravity * Math.min(reach, depth * 0.85)) : reach * range(rand, 2.5, 4.5)
+      const start = this.at(u0, depth * 0.03 * scale)
+      const vx = (this.inward.x * Math.cos(lean) + this.along.x * Math.sin(lean)) * v0
+      const vy = (this.inward.y * Math.cos(lean) + this.along.y * Math.sin(lean)) * v0 - (bottom ? 0 : range(rand, 0, 0.35) * v0)
+      const drop = new Droplet(start.x, start.y, vx, vy, range(rand, 3, 7) * (0.8 + 0.2 * power) * scale, {
         drag: 0.3,
         gravity,
         life: range(rand, 0.25, 1),
-        landY: floor,
+        landY: paperH,
         // A short tendril where the jet leaves the pool; the rest of the arc is just the flying drop
         streakFor: 0.06,
       })
-      this.pending.push({ delay: range(rand, 0, 0.1), drop })
+      this.pending.push({ delay: range(rand, 0, 0.14), drop })
     }
-    // Crown: short, wide spikes around the rim, fanning outward like a drop hitting a puddle
-    this.crown = Array.from({ length: Math.round(6 + 3 * power) }, () => {
-      const u = range(rand, -0.45, 0.45)
-      return {
-        x: x + u * this.PW,
-        h: this.PH * range(rand, 0.4, 1.4),
-        w: range(rand, 5, 11) * scale,
-        lean: u * 1.4 + gauss(rand) * 0.15,
-        delay: range(rand, 0.04, 0.18),
-      }
-    })
+  }
+
+  /** Paper position from edge coordinates: `u` along the edge, `v` into the paper */
+  private at(u: number, v: number): Pt {
+    return {
+      x: this.origin.x + this.along.x * u + this.inward.x * v,
+      y: this.origin.y + this.along.y * u + this.inward.y * v,
+    }
   }
 
   step(dt: number) {
     this.age += dt
     const ctx = this.ctx
-    const g = easeOut(clamp01(this.age / 0.22))
-    // Pool hugging the bottom edge, with a wavy top
-    const pts: Pt[] = []
-    for (let i = 0; i <= 32; i++) {
-      const u = (i / 32) * 2 - 1
-      const top = this.PH * g * Math.sqrt(1 - u * u) * this.shape(u * Math.PI)
-      pts.push({ x: this.x + (u * this.PW * g) / 2, y: this.floor - top })
+    let grown = true
+    for (const pool of this.pools) {
+      const g = easeOut(clamp01((this.age - pool.delay) / 0.22))
+      if (g < 1) grown = false
+      if (g <= 0) continue
+      // Half-ellipse hugging the edge, with a wavy rim
+      ctx.beginPath()
+      const first = this.at(pool.u - (pool.w * g) / 2, -4)
+      ctx.moveTo(first.x, first.y)
+      for (let i = 0; i <= 32; i++) {
+        const k = (i / 32) * 2 - 1
+        const p = this.at(pool.u + (k * pool.w * g) / 2, pool.h * g * Math.sqrt(1 - k * k) * pool.shape(k * Math.PI))
+        ctx.lineTo(p.x, p.y)
+      }
+      const last = this.at(pool.u + (pool.w * g) / 2, -4)
+      ctx.lineTo(last.x, last.y)
+      ctx.closePath()
+      ctx.fill()
     }
-    ctx.beginPath()
-    ctx.moveTo(pts[0].x, this.floor + 4)
-    for (const p of pts) ctx.lineTo(p.x, p.y)
-    ctx.lineTo(pts[pts.length - 1].x, this.floor + 4)
-    ctx.closePath()
-    ctx.fill()
 
     for (const c of this.crown) {
       const q = easeOut(clamp01((this.age - c.delay) / 0.16))
       if (q <= 0) continue
-      const baseY = this.floor - this.PH * 0.5
-      const tipX = c.x + Math.sin(c.lean) * c.h * q
-      const tipY = baseY - Math.cos(c.lean) * c.h * q
+      const len = c.h * q
+      const tip = this.at(c.u + Math.sin(c.lean) * len, c.base + Math.cos(c.lean) * len)
+      const b0 = this.at(c.u - c.w, c.base)
+      const b1 = this.at(c.u + c.w, c.base)
+      const c0 = this.at(c.u - c.w * 0.2, c.base + len * 0.5)
+      const c1 = this.at(c.u + c.w * 0.2, c.base + len * 0.5)
       ctx.beginPath()
-      ctx.moveTo(c.x - c.w, baseY)
-      ctx.quadraticCurveTo(c.x - c.w * 0.2, baseY - c.h * q * 0.5, tipX, tipY)
-      ctx.quadraticCurveTo(c.x + c.w * 0.2, baseY - c.h * q * 0.5, c.x + c.w, baseY)
+      ctx.moveTo(b0.x, b0.y)
+      ctx.quadraticCurveTo(c0.x, c0.y, tip.x, tip.y)
+      ctx.quadraticCurveTo(c1.x, c1.y, b1.x, b1.y)
       ctx.closePath()
       ctx.fill()
       ctx.beginPath()
-      ctx.arc(tipX, tipY, c.w * 0.4, 0, Math.PI * 2)
+      ctx.arc(tip.x, tip.y, c.w * 0.4, 0, Math.PI * 2)
       ctx.fill()
     }
 
@@ -586,7 +697,7 @@ class SplashEffect extends Effect {
               new Droplet(d.x, d.y, d.vx + gauss(this.rand) * 120, d.vy - range(this.rand, 0, 150), d.r * 0.55, {
                 drag: 0.3,
                 gravity: d.gravity,
-                life: 2.5,
+                life: range(this.rand, 0.15, 0.6),
                 landY: d.landY,
               }),
             )
@@ -595,7 +706,56 @@ class SplashEffect extends Effect {
       }
     }
     const dropsDone = this.stepDroplets(dt)
-    return g >= 1 && this.pending.length === 0 && dropsDone && this.age > 0.2
+    return grown && this.pending.length === 0 && dropsDone && this.age > 0.3
+  }
+}
+
+/**
+ * Head shake: paint flies off the head like water off a shaking dog. For half a second or so, drops spray
+ * out mostly sideways (both ways, alternating with the shake) with a little lift, and splat where they land.
+ */
+class SprayEffect extends Effect {
+  private at: Pt
+  private R: number
+  private duration: number
+  private rate: number
+  private power: number
+  private emitted = 0
+
+  constructor(canvas: HTMLCanvasElement, color: string, seed: number, at: Pt, power: number, unit: number, o: FxOptions) {
+    super(canvas, color, seed)
+    this.at = at
+    this.R = unit * 0.045
+    this.power = power
+    this.duration = 0.45 + 0.15 * power
+    this.rate = (140 + 90 * power) * o.splatter
+  }
+
+  step(dt: number) {
+    this.age += dt
+    const rand = this.rand
+    if (this.age < this.duration) {
+      const due = Math.floor(this.age * this.rate) - this.emitted
+      for (let i = 0; i < due; i++) {
+        this.emitted++
+        // The spray swings left and right with the shake (about 4 times a second)
+        const side = Math.sin(this.age * Math.PI * 8 + gauss(rand)) > 0 ? 0 : Math.PI
+        const a = side + gauss(rand) * 0.6 - 0.15
+        const big = rand() < 0.1
+        const speed = range(rand, 450, 1500) * (0.8 + 0.2 * this.power) * (big ? 0.7 : 1)
+        const sx = this.at.x + Math.cos(a) * this.R * range(rand, 0.5, 1.1)
+        const sy = this.at.y + gauss(rand) * this.R * 0.8
+        this.droplets.push(
+          new Droplet(sx, sy, Math.cos(a) * speed, Math.sin(a) * speed, this.R * range(rand, 0.06, 0.16) * (big ? 2 : 1), {
+            drag: 2.5,
+            gravity: 600,
+            life: range(rand, 0.15, 0.6),
+          }),
+        )
+      }
+    }
+    const dropsDone = this.stepDroplets(dt)
+    return this.age >= this.duration && dropsDone
   }
 }
 
@@ -608,6 +768,8 @@ export class InkCanvas {
   scale = 1
   /** Dark paper: ink adds light ("screen"), so overlaps glow brighter. Light paper: ink darkens ("multiply"). */
   dark = true
+  /** How much slower moves fade the paint: 0 = every move full strength, 1 = the slowest ones are faint */
+  gradient = 0.85
   private base: HTMLCanvasElement
   private baseCtx: Ctx
   private live: HTMLCanvasElement
@@ -667,19 +829,49 @@ export class InkCanvas {
     return Math.min(this.w, this.h) * this.scale
   }
 
+  /**
+   * The ink color for a given strength (0–1): full neon at 1, fading toward faint as the speed gradient
+   * allows. Even the slowest move keeps about a fifth of its color so it stays visible.
+   */
+  private tone(strength: number) {
+    return shade(this.color, 1 - this.gradient * (1 - strength) * 0.92, this.dark)
+  }
+
   punch(at: Pt, dir: Pt, power: number) {
     const R = this.unit * 0.05 * (0.8 + 0.4 * power)
-    this.add((c, seed) => new BlotEffect(c, this.color, seed, at, dir, power, R, this.options))
+    const color = this.tone(strengthFromPower(power))
+    this.add((c, seed) => new BlotEffect(c, color, seed, at, dir, power, R, this.options))
   }
 
-  /** `heavy` for kicks: a wider, wetter brush */
-  slash(path: Pt[], power: number, heavy = false) {
+  /**
+   * `heavy` for kicks: a wider, wetter brush. `speeds`: how fast each path point moved, as a multiple of
+   * the move's threshold, so the stroke fades where the hand was slow. Without it, the whole stroke
+   * follows `power`.
+   */
+  slash(path: Pt[], power: number, heavy = false, speeds?: number[]) {
     const W = this.unit * 0.03 * (0.8 + 0.3 * power) * (heavy ? 1.5 : 1)
-    this.add((c, seed) => new SlashEffect(c, this.color, seed, path, power, W, heavy, this.options))
+    const strengths = speeds ? speeds.map(strengthFromSpeed) : path.map(() => strengthFromPower(power))
+    const tone = (strength: number) => this.tone(strength)
+    this.add((c, seed) => new SlashEffect(c, this.color, seed, path, power, W, heavy, this.options, strengths, tone))
   }
 
+  /** Jump: a splash spread along the bottom edge around `x` */
   splash(x: number, power: number) {
-    this.add((c, seed) => new SplashEffect(c, this.color, seed, x, this.h, power, this.w, this.h, this.scale, this.options))
+    const color = this.tone(strengthFromPower(power))
+    this.add((c, seed) => new SplashEffect(c, color, seed, 'bottom', x, power, this.w, this.h, this.scale, this.options))
+  }
+
+  /** Arm wave: splashes in from both side edges, at the heights of the left and right hands */
+  sideSplash(leftY: number, rightY: number, power: number) {
+    const color = this.tone(strengthFromPower(power))
+    this.add((c, seed) => new SplashEffect(c, color, seed, 'left', leftY, power, this.w, this.h, this.scale, this.options))
+    this.add((c, seed) => new SplashEffect(c, color, seed + 1, 'right', rightY, power, this.w, this.h, this.scale, this.options))
+  }
+
+  /** Head shake: paint sprays off the head like a dog shaking itself dry */
+  spray(at: Pt, power: number) {
+    const color = this.tone(strengthFromPower(power))
+    this.add((c, seed) => new SprayEffect(c, color, seed, at, power, this.unit, this.options))
   }
 
   /** Advance animations by `dt` seconds and redraw the live layer */
@@ -710,7 +902,22 @@ export class InkCanvas {
     this.syncGlow(this.base, this.glow?.base)
   }
 
+  /** Clears the painting (undoable). The old painting fades and blurs away rather than vanishing. */
   clear() {
+    const parent = this.base.parentElement
+    if (parent && this.base.width > 0) {
+      const ghost = document.createElement('canvas')
+      ghost.width = this.base.width
+      ghost.height = this.base.height
+      const g = ghost.getContext('2d')!
+      g.drawImage(this.base, 0, 0)
+      g.drawImage(this.live, 0, 0)
+      ghost.className = 'ink-layer ink-fade'
+      parent.appendChild(ghost)
+      // Next frame, so the transition starts from fully visible
+      requestAnimationFrame(() => ghost.classList.add('gone'))
+      setTimeout(() => ghost.remove(), 1000)
+    }
     for (const e of this.effects) this.pool.push(e.canvas)
     this.effects = []
     this.snapshot()
@@ -769,16 +976,50 @@ export class InkCanvas {
     this.syncGlow(this.base, this.glow?.base)
     this.syncGlow(this.live, this.glow?.live)
   }
+
+  /**
+   * The painting as it looks on screen, as a PNG: paper texture, the neon glow on dark paper, and the
+   * ink (including anything still animating), blended the same way the page blends its layers.
+   */
+  async exportImage(style: 'dark' | 'white' | 'light'): Promise<Blob | null> {
+    if (this.base.width === 0) return null
+    const out = document.createElement('canvas')
+    out.width = this.base.width
+    out.height = this.base.height
+    const ctx = out.getContext('2d')!
+    const tile = new Image()
+    tile.src = paperTexture(style)
+    await tile.decode()
+    // The texture tile is sized in CSS pixels, like the page background
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+    ctx.fillStyle = ctx.createPattern(tile, 'repeat')!
+    ctx.fillRect(0, 0, this.w, this.h)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalCompositeOperation = this.blend
+    if (this.dark) {
+      // Same look as the CSS on the glow layers (.ink-dark .ink-glow)
+      ctx.filter = `blur(${14 * this.dpr}px) saturate(1.5) brightness(1.4)`
+      ctx.globalAlpha = 0.9
+      ctx.drawImage(this.base, 0, 0)
+      ctx.drawImage(this.live, 0, 0)
+      ctx.filter = 'none'
+      ctx.globalAlpha = 1
+    }
+    ctx.drawImage(this.base, 0, 0)
+    ctx.drawImage(this.live, 0, 0)
+    return new Promise((resolve) => out.toBlob(resolve, 'image/png'))
+  }
 }
 
 /** A tileable paper texture (fibers and speckles), as a data URL for a CSS background */
-export function paperTexture(dark: boolean) {
+export function paperTexture(style: 'dark' | 'white' | 'light') {
+  const dark = style === 'dark'
   const size = 256
   const c = document.createElement('canvas')
   c.width = size
   c.height = size
   const ctx = c.getContext('2d')!
-  ctx.fillStyle = dark ? '#0b0a12' : '#f5eedd'
+  ctx.fillStyle = { dark: '#0b0a12', white: '#ffffff', light: '#f5eedd' }[style]
   ctx.fillRect(0, 0, size, size)
   const rand = makeRand(7)
   for (let i = 0; i < 900; i++) {
@@ -790,9 +1031,11 @@ export function paperTexture(dark: boolean) {
       ? rand() < 0.5
         ? `rgba(140, 120, 255, ${range(rand, 0.02, 0.05)})`
         : `rgba(255, 255, 255, ${range(rand, 0.015, 0.04)})`
-      : rand() < 0.5
-        ? `rgba(120, 100, 70, ${range(rand, 0.03, 0.08)})`
-        : `rgba(255, 255, 255, ${range(rand, 0.1, 0.3)})`
+      : style === 'white'
+        ? `rgba(120, 120, 140, ${range(rand, 0.01, 0.03)})`
+        : rand() < 0.5
+          ? `rgba(120, 100, 70, ${range(rand, 0.03, 0.08)})`
+          : `rgba(255, 255, 255, ${range(rand, 0.1, 0.3)})`
     ctx.strokeStyle = fiber
     ctx.lineWidth = range(rand, 0.4, 1.2)
     ctx.beginPath()
@@ -801,7 +1044,9 @@ export function paperTexture(dark: boolean) {
     ctx.stroke()
   }
   for (let i = 0; i < 400; i++) {
-    ctx.fillStyle = dark ? `rgba(255, 255, 255, ${range(rand, 0.03, 0.08)})` : `rgba(90, 70, 40, ${range(rand, 0.04, 0.12)})`
+    ctx.fillStyle = dark
+      ? `rgba(255, 255, 255, ${range(rand, 0.03, 0.08)})`
+      : `rgba(90, 70, 40, ${range(rand, style === 'white' ? 0.01 : 0.04, style === 'white' ? 0.03 : 0.12)})`
     ctx.fillRect(rand() * size, rand() * size, 1, 1)
   }
   return c.toDataURL()

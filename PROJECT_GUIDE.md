@@ -155,26 +155,34 @@ The flow end to end:
 ## Ink Dojo (full-body version)
 
 A second app at `ink.html`, built on the same pieces. Kids stand back from the camera, and their moves become
-animated ink: glowing neon on dark paper by default, or ink on rice paper (switch in **Tune → Ink**).
+animated ink: glowing neon on dark paper by default, softer colors on white paper, or ink on rice paper (the three
+paper buttons in the toolbar). The 🖼️ button saves the painting as a PNG, exactly as it looks on screen.
 
 | Move | Ink |
 |---|---|
 | 👊 **Punch** (at the camera, or out to the side) | A blot bursts open, throws spikes and droplets in the punch's direction, then drips |
 | 👋 **Swoosh** (sweep or wave an arm) | A calligraphy brush slash along the hand's path, breaking into dry bristles at the tail and flinging ink off the tip. Waving back and forth paints one slash per swing. |
 | 🦵 **Kick** | A heavier slash along the foot's rising arc |
-| 🦘 **Jump** | A splash rises from the bottom of the paper where you land: a pool, a crown of spikes, and drops that fly up and spatter |
+| 🦘 **Jump** | A splash spread along the bottom of the paper where you land: several pools with crowns of spikes, and jets fanning out that fly up and spatter |
+| 🙌 **Arm wave** (flap both arms up or down together, out to the sides) | Splashes come in from both side edges, at the height of each hand |
+| 🐶 **Head shake** (side to side, about three swings in a second) | Paint sprays off your head mostly sideways, like a wet dog shaking itself dry |
+| ✖ **Cross your arms in an X** and hold still (2.5 s) | Clears the paper: a ring fills while you hold, then the painting fades away. Undo brings it back. |
+
+**Speed gradient:** slower moves paint less neon (dimmer and greyer on dark paper, paler on light paper). Within one
+swoosh or kick, the slow start and end of the motion fade and the fast middle is full strength. Adjust or turn off with
+**Tune → Ink → Speed gradient**.
 
 Moves are detected with simple rules on MediaPipe **PoseLandmarker** body points (no training needed). Distances are
 measured in torso lengths, so the same thresholds work for any kid at any distance. Hands are measured relative to the
 shoulders and feet relative to the hips, so jumping or walking doesn't count as an arm or leg move. Everything can be
-tuned in **⚙️ Tune**. **Move size** raises or lowers every threshold at once (the defaults only react to big, deliberate moves). Tune also has buttons (and keys `1`–`4`) to try each effect without moving. With the mouse, click
+tuned in **⚙️ Tune**. **Move size** raises or lowers every threshold at once (the defaults only react to big, deliberate moves). Tune also has buttons (and keys `1`–`6`) to try each effect without moving. With the mouse, click
 the paper to punch or drag to swoosh.
 
 | File (`src/inkdojo/`) | What it does |
 |---|---|
 | `InkDojo.tsx` | The screen and per-frame loop: camera, pose model, moves → ink, hover-to-press toolbar, mouse fallback |
-| `moves.ts` | **Move detection.** `MoveDetector` follows each arm and leg (`LimbTracker`) and the hips (`JumpTracker`) and reports punches, swooshes, kicks and jumps. The file to edit to change what counts as a move. |
-| `inkfx.ts` | **The ink engine.** `BlotEffect`, `SlashEffect` and `SplashEffect` animate on their own layers with flying droplets and drips, then blend into the paper so overlapping hits darken. Also generates the paper texture. |
+| `moves.ts` | **Move detection.** `MoveDetector` follows each arm and leg (`LimbTracker`), the hips (`JumpTracker`) and the head (`ShakeTracker`), and reports punches, swooshes, kicks, jumps, arm waves and head shakes. The file to edit to change what counts as a move. |
+| `inkfx.ts` | **The ink engine.** `BlotEffect`, `SlashEffect`, `SplashEffect` (bottom or side edge) and `SprayEffect` animate on their own layers with flying droplets and drips, then blend into the paper so overlapping hits darken. Also generates the paper texture. |
 | `overlay.ts` | Hand and foot trails, comic-style move callouts, and the camera preview's skeleton and jump meter |
 | `InkPanel.tsx`, `settings.ts` | The tuning panel and its settings (saved under `inkdojo-settings`) |
 | `pose.ts` | Loads the pose model. Body point names. |

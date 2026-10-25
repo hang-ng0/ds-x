@@ -4,7 +4,15 @@ import type { DetectorDebug, MoveKind } from './moves'
 import { POSE_CONNECTIONS } from './pose'
 import type { InkSettings } from './settings'
 
-export const MOVE_LABELS: Record<MoveKind, string> = { punch: 'PUNCH!', slash: 'SWOOSH!', kick: 'KICK!', jump: 'JUMP!' }
+export const MOVE_LABELS: Record<MoveKind, string> = {
+  punch: 'PUNCH!',
+  slash: 'SWOOSH!',
+  kick: 'KICK!',
+  jump: 'JUMP!',
+  wave: 'SPLASH!',
+  shake: 'SHAKE!',
+  clear: 'CLEAR!',
+}
 const POPUP_MS = 650
 
 export type Popup = { text: string; x: number; y: number; born: number; tilt: number }
@@ -21,6 +29,8 @@ export type OverlayFrame = {
   hint: string | null
   /** Dark paper: callouts take the ink's neon color with a dark outline and glow */
   dark: boolean
+  /** Arms crossed in an X: where (client pixels) and how far along the hold to clear is */
+  clear: { at: Pt; progress: number } | null
 }
 
 /** Full-window layer: where your hands and feet are, move callouts, and hints */
@@ -55,6 +65,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, f: OverlayFrame) {
   }
   ctx.restore()
 
+  if (f.clear && f.clear.progress > 0) drawClearRing(ctx, f.clear.at, f.clear.progress, f.dark)
   for (const p of f.popups) drawPopup(ctx, p, f.now, f.dark ? f.color : null)
 
   if (f.hint) {
@@ -65,6 +76,28 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, f: OverlayFrame) {
     ctx.fillText(f.hint, f.paper.x + f.paper.w / 2, f.paper.y + f.paper.h / 2)
     ctx.restore()
   }
+}
+
+// Hold-to-clear feedback: a ring around the crossed arms that fills up, with a label
+function drawClearRing(ctx: CanvasRenderingContext2D, at: Pt, progress: number, dark: boolean) {
+  const r = 70
+  ctx.save()
+  ctx.lineCap = 'round'
+  ctx.lineWidth = 14
+  ctx.strokeStyle = dark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.12)'
+  ctx.beginPath()
+  ctx.arc(at.x, at.y, r, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.lineWidth = 10
+  ctx.strokeStyle = dark ? '#ffffff' : '#c0182d'
+  ctx.beginPath()
+  ctx.arc(at.x, at.y, r, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2)
+  ctx.stroke()
+  ctx.font = 'bold 20px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillStyle = dark ? '#ffffff' : '#222'
+  ctx.fillText('✖ Hold to clear', at.x, at.y + r + 34)
+  ctx.restore()
 }
 
 // Comic-book callout that pops in big, settles, and fades
@@ -176,7 +209,7 @@ export function hudText(debug: DetectorDebug | null, fps: number, lastMove: stri
   const names: Record<string, string> = { leftArm: 'L arm', rightArm: 'R arm', leftLeg: 'L leg', rightLeg: 'R leg' }
   return [
     `${fps.toFixed(0)} fps   last move: ${lastMove || '–'}`,
-    `jump rise ${debug.rise.toFixed(2)}${debug.airborne ? '  AIRBORNE' : ''}`,
+    `jump rise ${debug.rise.toFixed(2)}${debug.airborne ? '  AIRBORNE' : ''}   head swings ${debug.headSwings}`,
     ...debug.limbs.map((l) =>
       l.at
         ? `${names[l.limb].padEnd(6)} speed ${l.speed.toFixed(1).padStart(4)}  ext ${l.extRate.toFixed(1).padStart(5)}${l.limb.endsWith('Leg') ? `  lift ${l.lift.toFixed(2)}` : ''}${l.moving ? '  ●' : ''}`

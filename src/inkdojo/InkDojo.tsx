@@ -11,18 +11,24 @@ import { DEFAULT_INK_SETTINGS, loadInkSettings, saveInkSettings, type InkSetting
 import '../fingerpaint/FingerPaint.css'
 import './inkdojo.css'
 
-// Neon, high-contrast inks. The last swatch ("base") is white on dark paper and black on rice paper.
-const BASE_INK = 'base'
-const INK_COLORS = [
-  { name: 'Neon pink', value: '#ff2bd6' },
-  { name: 'Neon green', value: '#39ff14' },
-  { name: 'Electric blue', value: '#00e5ff' },
-  { name: 'Neon yellow', value: '#faff00' },
-  { name: 'Neon orange', value: '#ff6b00' },
-  { name: 'Neon violet', value: '#b026ff' },
-  { name: 'White / black', value: BASE_INK },
+// Each ink has a version per paper: neon on dark paper (and rice paper), softer and a little less
+// contrasty on white. The last one is the "base" ink: white on dark paper, near-black elsewhere.
+const INKS: { name: string; dark: string; white: string; light: string }[] = [
+  { name: 'Pink', dark: '#ff2bd6', white: '#e9479f', light: '#ff2bd6' },
+  { name: 'Green', dark: '#39ff14', white: '#3fbf4a', light: '#39ff14' },
+  { name: 'Blue', dark: '#00e5ff', white: '#2a9fd6', light: '#00e5ff' },
+  { name: 'Yellow', dark: '#faff00', white: '#f2b705', light: '#faff00' },
+  { name: 'Orange', dark: '#ff6b00', white: '#f27a2e', light: '#ff6b00' },
+  { name: 'Violet', dark: '#b026ff', white: '#8a4fd8', light: '#b026ff' },
+  { name: 'White / black', dark: '#ffffff', white: '#2e2e3a', light: '#141414' },
 ]
-const resolveInk = (color: string, paper: PaperStyle) => (color === BASE_INK ? (paper === 'dark' ? '#ffffff' : '#141414') : color)
+const resolveInk = (ink: number, paper: PaperStyle) => INKS[ink][paper]
+
+const PAPERS: { style: PaperStyle; name: string }[] = [
+  { style: 'dark', name: 'Neon (dark paper)' },
+  { style: 'white', name: 'White paper' },
+  { style: 'light', name: 'Rice paper' },
+]
 
 type Status = { kind: 'loading' } | { kind: 'ready' } | { kind: 'error'; message: string }
 
@@ -61,7 +67,7 @@ export default function InkDojo() {
   const hudRef = useRef<HTMLPreElement>(null)
 
   const [settings, setSettings] = useState<InkSettings>(loadInkSettings)
-  const [color, setColor] = useState(INK_COLORS[0].value)
+  const [color, setColor] = useState(0)
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
   const [modelStatus, setModelStatus] = useState<'loading' | 'ready'>('loading')
   const [videoAspect, setVideoAspect] = useState(4 / 3)
@@ -72,7 +78,9 @@ export default function InkDojo() {
   const inkRef = useRef<InkCanvas | null>(null)
   const landmarkerRef = useRef<PoseLandmarker | null>(null)
   const demoRef = useRef<(kind: MoveKind) => void>(() => {})
-  const pointerPathRef = useRef<{ pts: Pt[]; start: number } | null>(null)
+  // Shows a callout ("SAVED!") from outside the render loop
+  const notifyRef = useRef<(text: string, at: Pt) => void>(() => {})
+  const pointerPathRef = useRef<{ pts: Pt[]; times: number[] } | null>(null)
 
   useEffect(() => {
     settingsRef.current = settings
@@ -83,6 +91,7 @@ export default function InkDojo() {
     ink.splatter = settings.splatter
     ink.drips = settings.drips
     ink.scale = settings.inkScale
+    ink.gradient = settings.speedGradient
   }, [settings])
 
   useEffect(() => {
@@ -92,7 +101,7 @@ export default function InkDojo() {
   // Paper style: texture, how ink blends, and the glow layers
   useEffect(() => {
     const dark = settings.paper === 'dark'
-    paperRef.current!.style.backgroundImage = `url(${paperTexture(dark)})`
+    paperRef.current!.style.backgroundImage = `url(${paperTexture(settings.paper)})`
     const ink = inkRef.current
     if (!ink) return
     ink.dark = dark
@@ -136,7 +145,7 @@ export default function InkDojo() {
     const pctx = preview.getContext('2d')!
     const ink = new InkCanvas(baseRef.current!, liveRef.current!, { base: baseGlowRef.current!, live: liveGlowRef.current! })
     const s0 = settingsRef.current
-    Object.assign(ink, { opacity: s0.inkOpacity, splatter: s0.splatter, drips: s0.drips, scale: s0.inkScale, dark: s0.paper === 'dark' })
+    Object.assign(ink, { opacity: s0.inkOpacity, splatter: s0.splatter, drips: s0.drips, scale: s0.inkScale, dark: s0.paper === 'dark', gradient: s0.speedGradient })
     inkRef.current = ink
     const detector = new MoveDetector()
     const dwells = [new Dwell(), new Dwell()]
@@ -152,6 +161,7 @@ export default function InkDojo() {
     let lastMove = ''
     let popups: Popup[] = []
     let trails: { pts: Pt[]; moving: boolean }[] = []
+    let clearRing: { at: Pt; progress: number } | null = null
 
     const sizeCanvas = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, w: number, h: number) => {
       const dpr = window.devicePixelRatio || 1
@@ -173,8 +183,9 @@ export default function InkDojo() {
       popups.push({ text: MOVE_LABELS[kind], x: at.x, y: at.y, born: performance.now(), tilt: (Math.random() - 0.5) * 0.35 })
       lastMove = kind
     }
+    notifyRef.current = (text, at) => popups.push({ text, x: at.x, y: at.y, born: performance.now(), tilt: (Math.random() - 0.5) * 0.35 })
 
-    // Effect demos (Tune panel buttons, keys 1–4): random spots on the paper
+    // Effect demos (Tune panel buttons, keys 1–6): random spots on the paper
     demoRef.current = (kind) => {
       const { w, h } = ink.size
       const p = paper.getBoundingClientRect()
@@ -186,13 +197,23 @@ export default function InkDojo() {
         popup(kind, { x: p.left + at.x, y: p.top + at.y })
       } else if (kind === 'slash' || kind === 'kick') {
         const path = demoPath(w, h, kind === 'kick')
-        ink.slash(path, power, kind === 'kick')
+        // Speeds up then slows down, like a real swing, so the stroke fades in and out
+        const speeds = path.map((_, i) => 0.4 + 2.2 * Math.sin((i / (path.length - 1)) * Math.PI))
+        ink.slash(path, power, kind === 'kick', speeds)
         const end = path[path.length - 1]
         popup(kind, { x: p.left + end.x, y: p.top + end.y })
-      } else {
+      } else if (kind === 'jump') {
         const x = w * (0.2 + Math.random() * 0.6)
         ink.splash(x, power)
         popup(kind, { x: p.left + x, y: p.top + h * 0.75 })
+      } else if (kind === 'wave') {
+        const y = h * (0.25 + Math.random() * 0.4)
+        ink.sideSplash(y, y + (Math.random() - 0.5) * h * 0.2, power)
+        popup(kind, { x: p.left + w / 2, y: p.top + y })
+      } else {
+        const at = { x: w * (0.3 + Math.random() * 0.4), y: h * (0.2 + Math.random() * 0.3) }
+        ink.spray(at, power)
+        popup(kind, { x: p.left + at.x, y: p.top + at.y - h * 0.08 })
       }
     }
 
@@ -225,8 +246,16 @@ export default function InkDojo() {
 
         for (const m of moves) {
           if (m.kind === 'punch') ink.punch(toPaper(m.at), m.dir, m.power)
-          else if (m.kind === 'slash' || m.kind === 'kick') ink.slash(m.path.map(toPaper), m.power, m.kind === 'kick')
-          else ink.splash(toPaper(m.at).x, m.power)
+          else if (m.kind === 'slash' || m.kind === 'kick') ink.slash(m.path.map(toPaper), m.power, m.kind === 'kick', m.speeds)
+          else if (m.kind === 'clear') ink.clear()
+          else if (m.kind === 'jump') ink.splash(toPaper(m.at).x, m.power)
+          else if (m.kind === 'shake') ink.spray(toPaper(m.at), m.power)
+          else {
+            // Arm wave: each side's splash comes in at the height of the hand on that side of the screen
+            const [a, b] = m.path.map(toPaper)
+            const [onLeft, onRight] = a.x < b.x ? [a, b] : [b, a]
+            ink.sideSplash(onLeft.y, onRight.y, m.power)
+          }
           const at = m.kind === 'jump' ? { x: screen(m.at).x, y: paperRect.y + paperRect.h * 0.75 } : screen(m.at)
           popup(m.kind, at)
         }
@@ -241,6 +270,7 @@ export default function InkDojo() {
         })
 
         trails = (debug?.limbs ?? []).filter((l) => l.at).map((l) => ({ pts: l.trail.map(screen), moving: l.moving }))
+        clearRing = debug?.clear ? { at: screen(debug.clear.at), progress: debug.clear.progress } : null
         drawPreview(pctx, { w: preview.clientWidth, h: preview.clientHeight, landmarks: lm, debug, settings: s })
         if (s.showHud) hud.textContent = hudText(debug, fps, lastMove)
       }
@@ -257,6 +287,7 @@ export default function InkDojo() {
         paper: paperRect,
         hint: noBody ? 'Step back so I can see you 🥋' : null,
         dark: s.paper === 'dark',
+        clear: noBody ? null : clearRing,
       })
     }
 
@@ -284,7 +315,7 @@ export default function InkDojo() {
 
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return
-      const demo = (['punch', 'slash', 'kick', 'jump'] as const)[Number(e.key) - 1]
+      const demo = (['punch', 'slash', 'kick', 'jump', 'wave', 'shake'] as const)[Number(e.key) - 1]
       if (demo) demoRef.current(demo)
       else if (e.key === 's') setPanelOpen((open) => !open)
       else if (e.key === 'z') ink.undo()
@@ -302,13 +333,41 @@ export default function InkDojo() {
     }
   }, [])
 
+  /** Downloads the painting as a PNG, with a camera-style flash */
+  const savePainting = async () => {
+    const ink = inkRef.current
+    const paper = paperRef.current
+    if (!ink || !paper) return
+    // Feedback right away; the flash is a page element, so it never ends up in the picture
+    const flash = document.createElement('div')
+    flash.className = 'ink-flash'
+    paper.appendChild(flash)
+    setTimeout(() => flash.remove(), 700)
+    const r = paper.getBoundingClientRect()
+    notifyRef.current('SAVED!', { x: r.left + r.width / 2, y: r.top + r.height * 0.4 })
+    const blob = await ink.exportImage(settings.paper)
+    if (!blob) return
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    // Local date and time, e.g. ink-dojo-2026-10-24-19-05-12.png
+    const d = new Date()
+    const two = (n: number) => String(n).padStart(2, '0')
+    a.download = `ink-dojo-${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}-${two(d.getMinutes())}-${two(d.getSeconds())}.png`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   // Mouse/touch: click to punch, drag to swoosh (handy for testing without standing up)
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId)
-    pointerPathRef.current = { pts: [{ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }], start: performance.now() }
+    pointerPathRef.current = { pts: [{ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }], times: [performance.now()] }
   }
   const onPointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
-    pointerPathRef.current?.pts.push({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY })
+    const drag = pointerPathRef.current
+    if (!drag) return
+    drag.pts.push({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY })
+    drag.times.push(performance.now())
   }
   const onPointerUp = () => {
     const drag = pointerPathRef.current
@@ -321,8 +380,16 @@ export default function InkDojo() {
     if (len < 15) {
       ink.punch(pts[0], { x: 0, y: 0 }, 1.5)
     } else {
-      const speed = len / Math.max((performance.now() - drag.start) / 1000, 0.05)
-      ink.slash(pts, Math.min(Math.max(speed / 900, 1), 3))
+      const speed = len / Math.max((performance.now() - drag.times[0]) / 1000, 0.05)
+      // Per-point drag speed (over a few points), as a multiple of a brisk 900 px/s, for the speed gradient
+      const speeds = pts.map((_, i) => {
+        const a = Math.max(i - 2, 0)
+        const b = Math.min(i + 2, pts.length - 1)
+        let d = 0
+        for (let k = a + 1; k <= b; k++) d += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y)
+        return d / Math.max((drag.times[b] - drag.times[a]) / 1000, 0.008) / 900
+      })
+      ink.slash(pts, Math.min(Math.max(speed / 900, 1), 3), false, speeds)
     }
   }
 
@@ -330,16 +397,28 @@ export default function InkDojo() {
     <div className="fp-app">
       <main className="fp-workspace ink-workspace" ref={workspaceRef}>
         <nav className="fp-bar fp-colors" data-ui>
-          {INK_COLORS.map((c) => (
+          {INKS.map((c, i) => (
             <button
-              key={c.value}
+              key={c.name}
               type="button"
               data-dwell="900"
               aria-label={c.name}
               title={c.name}
-              className={`fp-tool fp-color${color === c.value ? ' selected' : ''}`}
-              style={{ '--swatch': resolveInk(c.value, settings.paper) } as CSSProperties}
-              onClick={() => setColor(c.value)}
+              className={`fp-tool fp-color${color === i ? ' selected' : ''}`}
+              style={{ '--swatch': resolveInk(i, settings.paper) } as CSSProperties}
+              onClick={() => setColor(i)}
+            />
+          ))}
+          <span className="fp-divider ink-divider" />
+          {PAPERS.map((p) => (
+            <button
+              key={p.style}
+              type="button"
+              data-dwell="900"
+              aria-label={p.name}
+              title={p.name}
+              className={`fp-tool ink-paper-btn ink-paper-${p.style}${settings.paper === p.style ? ' selected' : ''}`}
+              onClick={() => setSettings((prev) => ({ ...prev, paper: p.style }))}
             />
           ))}
           <span className="fp-divider ink-divider" />
@@ -349,9 +428,12 @@ export default function InkDojo() {
           <button type="button" data-dwell="1500" aria-label="Clear" title="Clear" className="fp-tool" onClick={() => inkRef.current?.clear()}>
             🗑️
           </button>
+          <button type="button" data-dwell="1200" aria-label="Save picture" title="Save picture" className="fp-tool" onClick={savePainting}>
+            🖼️
+          </button>
         </nav>
 
-        <div className={`fp-paper ink-paper${settings.paper === 'dark' ? ' ink-dark' : ''}`} ref={paperRef}>
+        <div className={`fp-paper ink-paper ink-${settings.paper}`} ref={paperRef}>
           {/* Blurred half-size copies of the ink layers, for the neon glow on dark paper */}
           <canvas ref={baseGlowRef} className="ink-layer ink-glow" />
           <canvas
@@ -375,7 +457,7 @@ export default function InkDojo() {
           {status.kind === 'ready' && modelStatus === 'loading' && <div className="fp-camera-status">Loading body tracking…</div>}
           {status.kind === 'error' && <div className="fp-camera-status fp-error">{status.message}</div>}
         </div>
-        <p className="ink-tip">Stand back so your whole body fits in the camera. Punch, swoosh your arms, kick and jump!</p>
+        <p className="ink-tip">Stand back so your whole body fits in the camera. Punch, swoosh, kick, jump, flap your arms, and shake your head!</p>
 
         <div className="fp-actions">
           <button type="button" title="Tune moves and ink (S)" className={panelOpen ? 'active' : ''} onClick={() => setPanelOpen((open) => !open)}>

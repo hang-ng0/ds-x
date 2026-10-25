@@ -15,6 +15,8 @@ const DEMOS: { kind: MoveKind; label: string }[] = [
   { kind: 'slash', label: '👋 Swoosh' },
   { kind: 'kick', label: '🦵 Kick' },
   { kind: 'jump', label: '🦘 Jump' },
+  { kind: 'wave', label: '🙌 Arm wave' },
+  { kind: 'shake', label: '🐶 Head shake' },
 ]
 
 export default function InkPanel({ settings: s, onChange, onDemo, onReset, onClose }: Props) {
@@ -33,7 +35,7 @@ export default function InkPanel({ settings: s, onChange, onDemo, onReset, onClo
             </button>
           ))}
         </div>
-        <p className="fp-note">Keys 1–4 do the same. With the mouse: click the paper to punch, drag to swoosh.</p>
+        <p className="fp-note">Keys 1–6 do the same. With the mouse: click the paper to punch, drag to swoosh.</p>
       </Section>
 
       <Section title="Moves">
@@ -46,19 +48,17 @@ export default function InkPanel({ settings: s, onChange, onDemo, onReset, onClo
         <Slider label="Kick speed" value={s.kickSpeed} min={1} max={10} step={0.1} onChange={(kickSpeed) => onChange({ kickSpeed })} />
         <Slider label="Kick height" hint="How high the foot must rise" value={s.kickLift} min={0.1} max={1.5} step={0.01} onChange={(kickLift) => onChange({ kickLift })} />
         <Slider label="Jump height" hint="How far the hips must rise" value={s.jumpHeight} min={0.05} max={0.5} step={0.01} onChange={(jumpHeight) => onChange({ jumpHeight })} />
+        <Slider label="Arm wave speed" hint="Flap both arms (out to the sides) up or down at least this fast" value={s.flapSpeed} min={1} max={10} step={0.1} onChange={(flapSpeed) => onChange({ flapSpeed })} />
+        <Slider label="Head shake swing" hint="How far the head must swing each way, 3 times in about a second" value={s.shakeSwing} min={0.04} max={0.4} step={0.01} onChange={(shakeSwing) => onChange({ shakeSwing })} />
+        <Toggle label="Cross arms in an X to clear" checked={s.xClear} onChange={(xClear) => onChange({ xClear })} />
+        <Slider label="X hold time (s)" hint="How long to hold the crossed arms before the paper clears" value={s.clearHoldSeconds} min={1.5} max={4} step={0.1} onChange={(clearHoldSeconds) => onChange({ clearHoldSeconds })} />
         <Slider label="Cooldown (ms)" hint="Pause per arm/leg so one move doesn't fire twice" value={s.cooldownMs} min={0} max={800} step={10} onChange={(cooldownMs) => onChange({ cooldownMs })} />
       </Section>
 
       <Section title="Ink">
-        <div className="fp-segmented">
-          {(['dark', 'light'] as const).map((paper) => (
-            <button key={paper} type="button" className={s.paper === paper ? 'active' : ''} onClick={() => onChange({ paper })}>
-              {paper === 'dark' ? 'Neon (dark)' : 'Rice paper'}
-            </button>
-          ))}
-        </div>
         <Slider label="Ink size" value={s.inkScale} min={0.4} max={2.5} step={0.05} onChange={(inkScale) => onChange({ inkScale })} />
         <Slider label="Splatter" hint="How many droplets fly" value={s.splatter} min={0} max={3} step={0.1} onChange={(splatter) => onChange({ splatter })} />
+        <Slider label="Speed gradient" hint="Slower moves paint less neon (dimmer or paler). 0 = off" value={s.speedGradient} min={0} max={1} step={0.05} onChange={(speedGradient) => onChange({ speedGradient })} />
         <Slider label="Ink opacity" hint="Lower = hits layer and darken more" value={s.inkOpacity} min={0.2} max={1} step={0.05} onChange={(inkOpacity) => onChange({ inkOpacity })} />
         <Toggle label="Drips" checked={s.drips} onChange={(drips) => onChange({ drips })} />
       </Section>

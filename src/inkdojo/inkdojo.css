@@ -96,3 +96,71 @@
   filter: blur(14px) saturate(1.5) brightness(1.4);
   opacity: 0.9;
 }
+
+/* Clean white paper: softer colors, ink darkens where it overlaps (like the rice paper) */
+.ink-white {
+  background-color: #ffffff;
+}
+
+/* Clearing: the old painting fades, swells and blurs away */
+.ink-fade {
+  pointer-events: none;
+  transition: opacity 0.8s ease-out, transform 0.8s ease-out, filter 0.8s ease-out;
+}
+
+.ink-fade.gone {
+  opacity: 0;
+  transform: scale(1.05);
+  filter: blur(8px);
+}
+
+/* Paper buttons in the toolbar: each shows its paper, with a dab of ink to hint at the look */
+.ink-paper-btn::before {
+  content: '';
+  position: absolute;
+  inset: 26%;
+  border-radius: 50%;
+}
+
+.ink-paper-dark {
+  background: #0b0a12;
+}
+
+.ink-paper-dark::before {
+  background: #ff2bd6;
+  box-shadow: 0 0 8px 2px #ff2bd6;
+}
+
+.ink-paper-white {
+  background: #ffffff;
+}
+
+.ink-paper-white::before {
+  background: #2a9fd6;
+}
+
+.ink-paper-light {
+  background: #f5eedd;
+}
+
+.ink-paper-light::before {
+  background: #141414;
+}
+
+/* Saving: a quick camera flash over the paper */
+.ink-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  pointer-events: none;
+  animation: ink-flash 0.6s ease-out forwards;
+}
+
+@keyframes ink-flash {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0;
+  }
+}
