@@ -50,7 +50,6 @@ export default function Root(){
                         <SiteBar>
                             <Header />
                             <Nav />
-                            <Paint />
                         </SiteBar>
                         <Gallery />
                     </>
