@@ -55,7 +55,15 @@ export default function Root(){
                         <Gallery />
                     </>
                 } />
-                <Route path="/fingerpaint" element={<FingerPaint/>}/>
+                <Route path="/fingerpaint" element={
+                    <>
+                        <SiteBar>
+                            <Header />
+                            <Nav />
+                        </SiteBar>
+                        <FingerPaint/>
+                    </>
+                }/>
             </Routes>
         </>
     )
