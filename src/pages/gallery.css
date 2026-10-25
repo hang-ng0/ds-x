@@ -8,6 +8,8 @@
 
 .gallery-page a {
     color: #e8f1f8;
+    font-family: "Tahoma", "Helvetica", sans-serif;
+    font-size: calc(2px + 1.3vw);
 }
 
 .gallery-error {
@@ -81,7 +83,7 @@
     border-radius: 999px; /* pill shape; use 8px for rounded rectangle */
     background: #2a7099;
     color: #fff;
-    font-size: 14px;
+    font-size: calc(2px + 0.8vw);
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.15s ease, background 0.15s ease;

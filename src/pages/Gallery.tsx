@@ -104,7 +104,7 @@ export default function Gallery() {
                 })}
             </div>
 
-            <Link to="/inkdojo">← Back to Ink Dojo</Link>
+            <Link to="/paint">← Back to Painting</Link>
         </div>
     )
 }
