@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { Settings } from './settings'
+import { DEFAULT_SETTINGS, type ModeTuning, type PenMode, type Settings } from './settings'
 
 type Props = {
   settings: Settings
@@ -56,7 +56,14 @@ export function Section({ title, children }: { title: string; children: ReactNod
   )
 }
 
+const MODE_NAMES: Record<PenMode, string> = { reach: 'Reach', pinch: 'Pinch', gesture: 'Gesture' }
+
 export default function SettingsPanel({ settings: s, onChange, onReset, onClose }: Props) {
+  const modeName = MODE_NAMES[s.mode]
+  const tuning = s.modeTuning[s.mode]
+  const setTuning = (patch: Partial<ModeTuning>) =>
+    onChange({ modeTuning: { ...s.modeTuning, [s.mode]: { ...tuning, ...patch } } })
+
   return (
     <div className="fp-panel">
       <header>
@@ -73,7 +80,7 @@ export default function SettingsPanel({ settings: s, onChange, onReset, onClose 
               className={s.mode === mode ? 'active' : ''}
               onClick={() => onChange({ mode })}
             >
-              {{ reach: 'Reach', pinch: 'Pinch', gesture: 'Gesture' }[mode]}
+              {MODE_NAMES[mode]}
             </button>
           ))}
         </div>
@@ -116,13 +123,15 @@ export default function SettingsPanel({ settings: s, onChange, onReset, onClose 
             <Slider label="Release gap" hint="How far back to pull before the pen lifts" value={s.gap} min={0} max={0.5} step={0.01} onChange={(gap) => onChange({ gap })} />
           </>
         )}
+        <Slider label="Depth smoothing" hint="Higher = calmer depth, slower to react" value={s.depthSmoothing} min={0} max={0.95} step={0.05} onChange={(depthSmoothing) => onChange({ depthSmoothing })} />
         <Toggle label="Reach harder = thicker line" checked={s.pressure} onChange={(pressure) => onChange({ pressure })} />
       </Section>
 
       {s.mode === 'pinch' && (
         <Section title="Pinch">
           <Slider label="Pinch closed at" hint="Thumb–index gap ÷ palm size" value={s.pinchPress} min={0.1} max={0.8} step={0.01} onChange={(pinchPress) => onChange({ pinchPress })} />
-          <Slider label="Release gap" value={s.pinchGap} min={0} max={0.5} step={0.01} onChange={(pinchGap) => onChange({ pinchGap })} />
+          <Slider label="Release gap" hint="Lifts as soon as the gap passes this, with no frame delay" value={s.pinchGap} min={0} max={0.5} step={0.01} onChange={(pinchGap) => onChange({ pinchGap })} />
+          <Slider label="Lift when opening faster than" hint="Ends the stroke as the fingers start spreading. Lower = earlier lift, 0 = off" value={s.pinchOpenSpeed} min={0} max={5} step={0.1} onChange={(pinchOpenSpeed) => onChange({ pinchOpenSpeed })} />
         </Section>
       )}
 
@@ -131,20 +140,26 @@ export default function SettingsPanel({ settings: s, onChange, onReset, onClose 
         <Slider label="Handprint thickness" hint="Finger width in the handprint brush" value={s.handprint} min={0.4} max={2} step={0.05} onChange={(handprint) => onChange({ handprint })} />
       </Section>
 
-      <Section title="Timing">
-        <Slider label="Frames to press" hint="Higher = fewer accidental dots" value={s.pressFrames} min={1} max={8} step={1} onChange={(pressFrames) => onChange({ pressFrames })} />
-        <Slider label="Frames to lift" hint="Higher = fewer broken lines" value={s.liftFrames} min={1} max={10} step={1} onChange={(liftFrames) => onChange({ liftFrames })} />
-      </Section>
-
-      <Section title="Smoothing">
-        <Slider label="Steadiness (min cutoff)" hint="Lower = steadier but laggier" value={s.minCutoff} min={0.1} max={5} step={0.05} onChange={(minCutoff) => onChange({ minCutoff })} />
-        <Slider label="Speed response (beta)" hint="Higher = less lag on fast strokes" value={s.beta} min={0} max={0.08} step={0.001} onChange={(beta) => onChange({ beta })} />
-        <Slider label="Depth smoothing" hint="Higher = calmer depth, slower to react" value={s.depthSmoothing} min={0} max={0.95} step={0.05} onChange={(depthSmoothing) => onChange({ depthSmoothing })} />
+      <Section title={`Timing & smoothing: ${modeName}`}>
+        <p className="fp-note">
+          Each pen-down mode keeps its own values{s.mode === 'pinch' && ' (Fingers and Handprint use Reach’s, since they paint by reaching)'}.
+        </p>
+        {s.mode === 'pinch' && s.modeTuning.pinch.liftFrames > 1 && (
+          <p className="fp-note">Pinch lifts immediately when the fingers open, so Frames to lift rarely matters here.</p>
+        )}
+        <Slider label="Frames to press" hint="Higher = fewer accidental dots" value={tuning.pressFrames} min={1} max={8} step={1} onChange={(pressFrames) => setTuning({ pressFrames })} />
+        <Slider label="Frames to lift" hint="Higher = fewer broken lines" value={tuning.liftFrames} min={1} max={10} step={1} onChange={(liftFrames) => setTuning({ liftFrames })} />
+        <Slider label="Steadiness (min cutoff)" hint="Lower = steadier but laggier" value={tuning.minCutoff} min={0.1} max={5} step={0.05} onChange={(minCutoff) => setTuning({ minCutoff })} />
+        <Slider label="Speed response (beta)" hint="Higher = less lag on fast strokes" value={tuning.beta} min={0} max={0.08} step={0.001} onChange={(beta) => setTuning({ beta })} />
+        <button type="button" className="fp-link" onClick={() => setTuning(DEFAULT_SETTINGS.modeTuning[s.mode])}>
+          Restore {modeName} preset
+        </button>
       </Section>
 
       <Section title="Camera">
         <Toggle label="Track two hands" checked={s.twoHands} onChange={(twoHands) => onChange({ twoHands })} />
         <Slider label="Active area" hint="Dashed box in the preview. Smaller = less arm movement." value={s.activeArea} min={0.4} max={1} step={0.05} onChange={(activeArea) => onChange({ activeArea })} />
+        <Slider label="Shift area up" hint="Keeps the palm in view at the bottom of the paper. 0 = centered, 1 = top of camera." value={s.areaShiftUp} min={0} max={1} step={0.05} onChange={(areaShiftUp) => onChange({ areaShiftUp })} />
         <Slider label="Detection confidence" hint="Lower helps small hands; too low = ghost hands" value={s.minDetect} min={0.1} max={0.9} step={0.05} onChange={(minDetect) => onChange({ minDetect })} />
       </Section>
 

@@ -265,7 +265,7 @@ export default function FingerPaint() {
       const area = toRect(workspace.getBoundingClientRect())
       const paperRect = toRect(paper.getBoundingClientRect())
       const local = (p: Point) => ({ x: p.x - paperRect.x, y: p.y - paperRect.y })
-      const view = computeView(video.videoWidth, video.videoHeight, area, s.activeArea)
+      const view = computeView(video.videoWidth, video.videoHeight, area, s.activeArea, s.areaShiftUp)
       const calibrating = !!calibrationRef.current
       recorder.update(now, result.landmarks.length > 0, video)
 
@@ -363,7 +363,8 @@ export default function FingerPaint() {
     const start = async () => {
       try {
         const media = await navigator.mediaDevices.getUserMedia({
-          video: { width: 640, height: 480, facingMode: 'user' },
+          // 30 fps where the camera allows it: many webcams default lower in dim light, which makes tracking choppy
+          video: { width: 640, height: 480, frameRate: { ideal: 30 }, facingMode: 'user' },
           audio: false,
         })
         if (cancelled) {

@@ -11,6 +11,7 @@ This guide explains what each file does and how the pieces fit together.
 - [How it works](#how-it-works)
 - [What's in `src/`](#whats-in-src)
 - [What's in `training/`](#whats-in-training)
+- [Ink Dojo (full-body version)](#ink-dojo-full-body-version)
 - [Other files](#other-files)
 - [Key ideas](#key-ideas)
 - [Common changes](#common-changes)
@@ -28,6 +29,7 @@ npm run dev      # starts the site; open the address it prints (usually http://l
 - Use **Chrome or Edge** and allow camera access.
 - The camera only works on `localhost` or an `https://` address.
 - `npm run build` checks types and builds a production version into `dist/`. `npm run lint` checks code style.
+- The full-body **Ink Dojo** app is at `/ink.html` on the same server (e.g. http://localhost:5173/ink.html).
 
 ## Using the demo
 
@@ -150,6 +152,40 @@ The flow end to end:
 
 ---
 
+## Ink Dojo (full-body version)
+
+A second app at `ink.html`, built on the same pieces. Kids stand back from the camera, and their moves become
+animated ink: glowing neon on dark paper by default, or ink on rice paper (switch in **Tune → Ink**).
+
+| Move | Ink |
+|---|---|
+| 👊 **Punch** (at the camera, or out to the side) | A blot bursts open, throws spikes and droplets in the punch's direction, then drips |
+| 👋 **Swoosh** (sweep or wave an arm) | A calligraphy brush slash along the hand's path, breaking into dry bristles at the tail and flinging ink off the tip. Waving back and forth paints one slash per swing. |
+| 🦵 **Kick** | A heavier slash along the foot's rising arc |
+| 🦘 **Jump** | A splash rises from the bottom of the paper where you land: a pool, a crown of spikes, and drops that fly up and spatter |
+
+Moves are detected with simple rules on MediaPipe **PoseLandmarker** body points (no training needed). Distances are
+measured in torso lengths, so the same thresholds work for any kid at any distance. Hands are measured relative to the
+shoulders and feet relative to the hips, so jumping or walking doesn't count as an arm or leg move. Everything can be
+tuned in **⚙️ Tune**. **Move size** raises or lowers every threshold at once (the defaults only react to big, deliberate moves). Tune also has buttons (and keys `1`–`4`) to try each effect without moving. With the mouse, click
+the paper to punch or drag to swoosh.
+
+| File (`src/inkdojo/`) | What it does |
+|---|---|
+| `InkDojo.tsx` | The screen and per-frame loop: camera, pose model, moves → ink, hover-to-press toolbar, mouse fallback |
+| `moves.ts` | **Move detection.** `MoveDetector` follows each arm and leg (`LimbTracker`) and the hips (`JumpTracker`) and reports punches, swooshes, kicks and jumps. The file to edit to change what counts as a move. |
+| `inkfx.ts` | **The ink engine.** `BlotEffect`, `SlashEffect` and `SplashEffect` animate on their own layers with flying droplets and drips, then blend into the paper so overlapping hits darken. Also generates the paper texture. |
+| `overlay.ts` | Hand and foot trails, comic-style move callouts, and the camera preview's skeleton and jump meter |
+| `InkPanel.tsx`, `settings.ts` | The tuning panel and its settings (saved under `inkdojo-settings`) |
+| `pose.ts` | Loads the pose model. Body point names. |
+| `main.tsx`, `/ink.html`, `inkdojo.css` | Entry point, page, and the few styles that differ from the finger paint app |
+
+It reuses from `src/fingerpaint/`: the layout and panel styles, the `Slider`/`Toggle`/`Section` controls, hover-to-press
+buttons (`dwell.ts`), smoothing (`oneEuro.ts`) and camera-to-screen mapping (`hand.ts`). Models:
+`public/models/pose_landmarker_lite.task` (fast) and `pose_landmarker_full.task` (accurate), switchable in Tune.
+
+---
+
 ## Other files
 
 | File | What it does |
@@ -157,7 +193,7 @@ The flow end to end:
 | `public/models/gesture_recognizer.task` | MediaPipe's built-in hand + gesture model (8 MB). Stored in the repo so the app doesn't download it from Google at runtime. |
 | `public/models/custom_gesture_recognizer.task` | *(not in the repo until you train one)* Your custom model. |
 | `package.json` | Dependencies: React, `@mediapipe/tasks-vision` (pinned to 1.1.0), `react-router`. |
-| `vite.config.ts`, `tsconfig*.json`, `eslint.config.js` | Build, TypeScript and lint configuration (from the Vite template). |
+| `vite.config.ts`, `tsconfig*.json`, `eslint.config.js` | Build, TypeScript and lint configuration. `vite.config.ts` builds both pages (`index.html` and `ink.html`). |
 | `.gitignore` | Also excludes `gestures*.zip` (recorded camera photos) and training outputs. |
 | `prototype.js`, `README.md` | Currently empty. |
 
@@ -170,18 +206,26 @@ how far the hand is from the camera. Instead the app measures how big the palm l
 the screen.
 
 **Resting-hand reach (the default).** The app keeps track of how big each hand looks "at rest". Paint starts when the
-hand looks *Push amount* bigger than that (15% by default) and stops when it pulls back below *Push amount* minus
+hand looks *Push amount* bigger than that (12% by default) and stops when it pulls back below *Push amount* minus
 *Release gap*. The resting size slowly follows the hand, so leaning in or sitting back doesn't start painting. The
 alternative, **Fixed (calibrated)**, compares against the two sizes measured during calibration.
 
 **Debouncing.** The pen only changes state after the signal holds for a few frames (*Frames to press / lift*). That
-prevents stray dots and broken lines.
+prevents stray dots and broken lines. Pinch is the exception when lifting: it lifts immediately once the fingers pass
+the release point or start opening quickly, so spreading the fingers doesn't drag a line.
+
+**Each pen-down mode has its own feel.** Reach, Pinch and Gesture each keep their own frame counts and cursor smoothing
+(`modeTuning` in `settings.ts`), starting from a preset for that mode. Pinch is the snappiest because touching fingertips
+is a clear signal. Gesture is the most cautious because gesture labels flicker. Tuning one mode never changes another.
 
 **Smoothing.** Landmarks jitter. The One-Euro filter smooths heavily when the hand is still and lightly when it moves
 fast. *Steadiness* and *Speed response* in Tune control it.
 
-**Active area.** Only the middle part of the camera image (the dashed box in the preview) maps to the screen, so
-kids can reach the screen edges without their hand leaving the camera's view.
+**Active area.** Only part of the camera image (the dashed box in the preview) maps to the screen, so kids can reach
+the screen edges without their hand leaving the camera's view. The box is shifted toward the **top** of the camera
+image (*Shift area up*). The cursor follows the fingertip, but MediaPipe needs to see the palm, which hangs well below
+the fingertip. With a centered box, reaching the bottom of the paper pushes the palm out of the camera's view and the
+hand is lost.
 
 **Brush types.** *Pointer* paints with the index fingertip. *Fingers* paints one line per extended finger.
 *Handprint* stamps the whole hand shape. *Auto* picks one from the hand shape: 1 finger, 2–3 fingers, or an open hand.
