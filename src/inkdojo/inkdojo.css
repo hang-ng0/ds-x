@@ -5,6 +5,17 @@
   grid-template-columns: minmax(0, 1fr);
   min-height: 100vh;
   /*having a greater space to work on so increasing the height */
+  background-color: #2a7099;
+}
+
+/*right side bar css*/
+.fp-sidebar {
+  background-color: #2a7099; /* same blue as your main area */
+}
+
+/*hide the black data box about what the camera is collecting*/
+.fp-hud {
+  display: none;
 }
 
 /* Rice paper; the texture tile is generated at runtime (paperTexture in inkfx.ts) */
@@ -38,7 +49,8 @@
 
 .ink-tip {
   margin: 0;
-  color: #666;
+  color: white;
+  font-weight: bold;
   font-size: 13px;
 }
 
